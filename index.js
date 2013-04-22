@@ -38,16 +38,7 @@ var order = [
 var WINDOW = 32768
   , WINDOW_MINUS_ONE = WINDOW - 1
 
-function inflate(should_output, should_adler) {
-  should_output = should_output === undefined ? true : should_output
-  should_adler = should_adler === undefined ? true : should_adler
-
-  if(!should_output && !should_adler) {
-    // just turn off output.
-    should_output = function(arr) { } 
-    should_adler = function(val) { }
-  }
-
+function inflate() {
   var output = new Uint8Array(WINDOW)
     , stream = through(write, end)
     , need_input = false
@@ -80,6 +71,30 @@ function inflate(should_output, should_adler) {
   stream.once('resume', function() {
     execute()
   })
+
+  stream.recycle = function recycle() {
+    var out
+    buffer.length = 0
+    buffer_offset = 0
+    output_idx = 0
+    bitbuf = 0
+    bitcnt = 0
+    states.length = 0
+    is_final = false
+    need_input = false
+    bytes_read = 0
+    output_idx = 0
+    ended = false
+    state = null
+    got = 0
+    adler_s1 = 1
+    adler_s2 = 0
+    become(noop, {}, noop)
+    start_stream_header()
+    out = through(write, end)
+    out.recycle = recycle
+    return out
+  }
 
   _call_header = {
     last: null
@@ -135,6 +150,7 @@ function inflate(should_output, should_adler) {
   return stream
 
   function noop() {
+
   }
 
   function call_header() {
