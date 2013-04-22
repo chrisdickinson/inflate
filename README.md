@@ -16,7 +16,7 @@ your_input
 
 ## API
 
-#### inflate(should_output=true, should_adler=true) -> inflate stream
+#### inflate() -> inflate stream
 
 create an inflate stream. each inflate stream carries a 32k memory overhead (for the window).
 
