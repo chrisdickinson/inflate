@@ -7,14 +7,17 @@
 // which provided the basis for the first version of this code (available under the
 // ZLIB license).
 //
-// And, of course, the [RFC](http://www.ietf.org/rfc/rfc1950.txt) makes for
+// The [RFC](http://www.ietf.org/rfc/rfc1950.txt) makes for
 // some cozy bedtime reading.
 //
+// The source is available [on github](https://github.com/chrisdickinson/inflate);
+// and the package is [on npm](http://npm.im/).
+
+module.exports = inflate
+
 // To start with, let's require @dominictarr's [through](http://npm.im/through).
 // It simplifies stream creation in Node.JS 0.8.X, and is compatible with newer Node.JS
 // versions.
-module.exports = inflate
-
 var through = require('through')
   , Buffer = require('buffer').Buffer
 
