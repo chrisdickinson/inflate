@@ -11,7 +11,7 @@
 // some cozy bedtime reading.
 //
 // The source is available [on github](https://github.com/chrisdickinson/inflate);
-// and the package is [on npm](http://npm.im/).
+// and the package is [on npm](http://npm.im/inflate).
 
 module.exports = inflate
 
