@@ -45,7 +45,7 @@ function inflate(should_output, should_adler) {
   if(!should_output && !should_adler) {
     // just turn off output.
     should_output = function(arr) { } 
-    should_adler = function(val) {}
+    should_adler = function(val) { }
   }
 
   var output = new Uint8Array(WINDOW)
