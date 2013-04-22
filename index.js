@@ -514,7 +514,6 @@ function inflate(should_output, should_adler) {
     if(typeof then !== 'function') {
       throw new Error
     }
-    s.last = null
     states.unshift({
       current: fn
     , next: then
@@ -546,19 +545,21 @@ function inflate(should_output, should_adler) {
     idx = 0
     state.value = bitbuf
     while(bitcnt < state.need) {
+      bitbuf = state.value
       byt = take()
       if(need_input) {
-        bitbuf = state.value
-        return
+        break
       }
       ++idx
       state.value = (state.value | (byt << bitcnt)) >>> 0
       bitcnt += 8
     }
 
-    bitbuf = state.value >>> state.need
-    bitcnt -= state.need
-    unbecome((state.value & ((1 << state.need) - 1)) >>> 0)
+    if(!need_input) {
+      bitbuf = state.value >>> state.need
+      bitcnt -= state.need
+      unbecome((state.value & ((1 << state.need) - 1)) >>> 0)
+    }
   }
 
   function bytes() {
@@ -600,9 +601,7 @@ function inflate(should_output, should_adler) {
     adler_s1 = (adler_s1 + val) % 65521
     adler_s2 = (adler_s2 + adler_s1) % 65521
     output[output_idx++] = val
-    if(output_idx === WINDOW) {
-      output_idx &= WINDOW_MINUS_ONE
-    }
+    output_idx &= WINDOW_MINUS_ONE
     stream.queue(new Buffer([val]))
   }
 
