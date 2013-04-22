@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>inflate</title>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <meta name="viewport" content="width=device-width, target-densitydpi=160dpi, initial-scale=1.0; maximum-scale=1.0; user-scalable=0;">
+  <link rel="stylesheet" media="all" href="docco.css" />
+</head>
+<body>
+  <div id="container">
+    <div id="background"></div>
+    
+    <ul class="sections">
+        
+        
+        
+        <li id="section-1">
+            <div class="annotation">
+              
+              <div class="pilwrap for-h1">
+                <a class="pilcrow" href="#section-1">&#182;</a>
+              </div>
+              <h1>inflate</h1>
+<p>a tale in several (horrifying?) parts.</p>
+<p>first thing&#39;s first: infinite thanks to Mark Adler&#39;s
+<a href="http://svn.ghostscript.com/ghostscript/trunk/gs/zlib/contrib/puff/puff.c">puff.c</a>
+which provided the basis for the first version of this code (available under the
+ZLIB license).</p>
+<p>And, of course, the <a href="http://www.ietf.org/rfc/rfc1950.txt">RFC</a> makes for
+some cozy bedtime reading.</p>
+<p>To start with, let&#39;s require @dominictarr&#39;s <a href="http://npm.im/through">through</a>.
+It simplifies stream creation in Node.JS 0.8.X, and is compatible with newer Node.JS
+versions.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>module.exports = inflate
+
+<span class="keyword">var</span> through = require(<span class="string">'through'</span>)
+  , Buffer = require(<span class="string">'buffer'</span>).Buffer</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-2">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-2">&#182;</a>
+              </div>
+              <p>Some constants. If you&#39;d like to let your page slowly scroll down and go get some
+coffee now, I wouldn&#39;t mind. I&#39;ll wait.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre><span class="keyword">var</span> MAXBITS = <span class="number">15</span>
+  , MAXLCODES = <span class="number">286</span>
+  , MAXDCODES = <span class="number">30</span>
+  , MAXCODES = (MAXLCODES+MAXDCODES)
+  , FIXLCODES = <span class="number">288</span>
+
+<span class="keyword">var</span> lens = [
+  <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>, <span class="number">10</span>, <span class="number">11</span>, <span class="number">13</span>, <span class="number">15</span>, <span class="number">17</span>, <span class="number">19</span>, <span class="number">23</span>, <span class="number">27</span>, <span class="number">31</span>,
+  <span class="number">35</span>, <span class="number">43</span>, <span class="number">51</span>, <span class="number">59</span>, <span class="number">67</span>, <span class="number">83</span>, <span class="number">99</span>, <span class="number">115</span>, <span class="number">131</span>, <span class="number">163</span>, <span class="number">195</span>, <span class="number">227</span>, <span class="number">258</span>
+]
+
+<span class="keyword">var</span> lext = [
+  <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">1</span>, <span class="number">1</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">2</span>, <span class="number">2</span>, <span class="number">2</span>,
+  <span class="number">3</span>, <span class="number">3</span>, <span class="number">3</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">4</span>, <span class="number">4</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">5</span>, <span class="number">5</span>, <span class="number">5</span>, <span class="number">0</span>
+]
+
+<span class="keyword">var</span> dists = [
+  <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">7</span>, <span class="number">9</span>, <span class="number">13</span>, <span class="number">17</span>, <span class="number">25</span>, <span class="number">33</span>, <span class="number">49</span>, <span class="number">65</span>, <span class="number">97</span>, <span class="number">129</span>, <span class="number">193</span>,
+  <span class="number">257</span>, <span class="number">385</span>, <span class="number">513</span>, <span class="number">769</span>, <span class="number">1025</span>, <span class="number">1537</span>, <span class="number">2049</span>, <span class="number">3073</span>, <span class="number">4097</span>, <span class="number">6145</span>,
+  <span class="number">8193</span>, <span class="number">12289</span>, <span class="number">16385</span>, <span class="number">24577</span>
+]
+
+<span class="keyword">var</span> dext = [
+  <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">6</span>,
+  <span class="number">7</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">8</span>, <span class="number">9</span>, <span class="number">9</span>, <span class="number">10</span>, <span class="number">10</span>, <span class="number">11</span>, <span class="number">11</span>,
+  <span class="number">12</span>, <span class="number">12</span>, <span class="number">13</span>, <span class="number">13</span>
+]
+
+<span class="keyword">var</span> order = [
+  <span class="number">16</span>, <span class="number">17</span>, <span class="number">18</span>, <span class="number">0</span>, <span class="number">8</span>, <span class="number">7</span>, <span class="number">9</span>, <span class="number">6</span>, <span class="number">10</span>, <span class="number">5</span>, <span class="number">11</span>, <span class="number">4</span>, <span class="number">12</span>, <span class="number">3</span>, <span class="number">13</span>, <span class="number">2</span>, <span class="number">14</span>, <span class="number">1</span>, <span class="number">15</span>
+]</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-3">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-3">&#182;</a>
+              </div>
+              <p>So, inflate is predicated on the idea that we&#39;re able to reach
+back into things we&#39;ve previously output to create new output --
+that is, if we output &quot;tree&quot; at some point, instead of ever having
+to include the literal word &quot;tree&quot; again in bytes, we can simply
+refer to it using the magic of the <code>lencode</code> / <code>distcode</code> huffman
+trees.</p>
+<p>This means that, at minimum, to produce the desired output from a
+deflated stream, we must have at least as big of an output window
+as was used to <em>create</em> the stream. It just so happens that 32768
+bytes is the largest size (AFAIK), so we set that here.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre><span class="keyword">var</span> WINDOW = <span class="number">32768</span>
+  , WINDOW_MINUS_ONE = WINDOW - <span class="number">1</span>
+
+<span class="function"><span class="keyword">function</span> <span class="title">inflate</span><span class="params">()</span> {</span></pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-4">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-4">&#182;</a>
+              </div>
+              <p>Initialize the output window, the stream itself,
+as well as other bookkeeping.</p>
+<ul>
+<li><code>buffer</code> keeps a list of all <code>Buffer</code> instances received
+by <code>write</code>. We drop buffers out of that list when we&#39;ve
+exhausted them (slicing each buffer each time would create
+too much garbage, and in newer versions of browserify, &quot;slice&quot;
+incurs a copy operation -- which would kill perf.)</li>
+<li><code>buffer_offset</code> tells us how far into the current input we are.
+once <code>buffer_offset === buffer[0].length</code>, we shift that input off
+the stack.</li>
+<li><code>bytes_read</code> lets us tally the number of bytes we&#39;ve seen so we can
+report the final compressed length at the end of the stream.</li>
+<li><code>output</code> is our giant blob of output, and <code>output_idx</code> keeps track
+of our offset within it. We&#39;ll use modulos (well, bitwise modulos)
+to ping back and forth within it and avoid unnecessary garbage creation.</li>
+</ul>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="keyword">var</span> output = <span class="keyword">new</span> Uint8Array(WINDOW)
+    , stream = through(write, end)
+    , need_input = <span class="literal">false</span>
+    , buffer_offset = <span class="number">0</span>
+    , bytes_read = <span class="number">0</span>
+    , output_idx = <span class="number">0</span>
+    , ended = <span class="literal">false</span>
+    , state = <span class="literal">null</span>
+    , states = []
+    , buffer = []
+    , got = <span class="number">0</span></pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-5">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-5">&#182;</a>
+              </div>
+              <p>We&#39;re going to be reading a lot of individual bits.
+<code>bitcnt</code> keeps track of how many bits we have available
+to us, while <code>bitbuf</code> stores the remainder of the last byte
+that we didn&#39;t read.
+<code>is_final</code> keeps track of whether the current zlib block is
+the last in the stream. Finally, <code>fixed_codes</code> is the memoization 
+of a call to <code>fixed</code>, essentially.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="keyword">var</span> bitbuf = <span class="number">0</span>
+    , bitcnt = <span class="number">0</span>
+    , is_final = <span class="literal">false</span>
+    , fixed_codes</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-6">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-6">&#182;</a>
+              </div>
+              <p>Oh, and we&#39;re checksumming everything we output to make sure
+that when we get to the 4-byte adler check at the end of the stream,
+we&#39;re prepared to say whether or not we were just lying through our
+horrible, streaming teeth when we were producing output earlier.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="keyword">var</span> adler_s1 = <span class="number">1</span>
+    , adler_s2 = <span class="number">0</span></pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-7">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-7">&#182;</a>
+              </div>
+              <p>These are here to pique your interest and as a side effect
+prevent some global leakage. Mystery abounds!</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="keyword">var</span> _call_header
+    , _call_bytes
+    , _call_bits
+    , _call_codes
+    , _call_dynamic
+    , _call_decode</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-8">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-8">&#182;</a>
+              </div>
+              <p>If at any point our stream pauses (the next item in the chain
+of pipes can&#39;t accept any data at the moment), we&#39;ll need to be
+able to start executing again once it drains. This <code>resume</code> listener
+sets up that behavior.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  stream.on(<span class="string">'resume'</span>, <span class="keyword">function</span>() {
+    execute()
+  })</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-9">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-9">&#182;</a>
+              </div>
+              <p>Sort of an aside:
+When you define functions-within-a-function, they really,
+truly are new instances of functions. Calling the parent again
+will instruct JS to dutifully rebuild all of them in new memory
+locations -- importantly, this means <em>they do not share optimizations</em>.
+So if you can&#39;t recycle the stream&#39;s warmed-up, JIT&#39;d functions,
+you&#39;re doomed to JIT them again and again.</p>
+<p>Also, we&#39;re keeping 32K of memory around! May as well reuse that so
+the GC doesn&#39;t have a field day and slurp up all of our cycles.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  stream.recycle = <span class="function"><span class="keyword">function</span> <span class="title">recycle</span><span class="params">()</span> {</span>
+    <span class="keyword">var</span> out
+    buffer.length = <span class="number">0</span>
+    buffer_offset = <span class="number">0</span>
+    output_idx = <span class="number">0</span>
+    bitbuf = <span class="number">0</span>
+    bitcnt = <span class="number">0</span>
+    states.length = <span class="number">0</span>
+    is_final = <span class="literal">false</span>
+    need_input = <span class="literal">false</span>
+    bytes_read = <span class="number">0</span>
+    output_idx = <span class="number">0</span>
+    ended = <span class="literal">false</span>
+    state = <span class="literal">null</span>
+    got = <span class="number">0</span>
+    adler_s1 = <span class="number">1</span>
+    adler_s2 = <span class="number">0</span>
+    become(noop, {}, noop)
+    start_stream_header()
+    out = through(write, end)
+    out.recycle = recycle
+    <span class="keyword">return</span> out
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-10">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-10">&#182;</a>
+              </div>
+              <p>The mystery deepens.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  _call_header = {
+    last: <span class="literal">null</span>
+  }
+
+  _call_bytes = {
+    need: <span class="number">0</span>
+  , value: []
+  , last: <span class="literal">null</span>
+  }
+
+  _call_bits = {
+    need: <span class="number">0</span>
+  , value: []
+  , last: <span class="literal">null</span>
+  }
+
+  _call_codes = {
+      distcode: <span class="literal">null</span>
+    , lencode: <span class="literal">null</span>
+    , len: <span class="number">0</span>
+    , dist: <span class="number">0</span>
+    , symbol: <span class="number">0</span>
+    , last: <span class="literal">null</span>
+  }
+
+  _call_dynamic = {
+      distcode: {symbol: [], count: []}
+    , lencode: {symbol: [], count: []}
+    , lengths: []
+    , nlen: <span class="number">0</span>
+    , ndist: <span class="number">0</span>
+    , ncode: <span class="number">0</span>
+    , index: <span class="number">0</span>
+    , symbol: <span class="number">0</span>
+    , len: <span class="number">0</span>
+    , last: <span class="number">0</span>
+  }
+
+  _call_decode = {
+      huffman: <span class="literal">null</span>
+    , len: <span class="number">0</span>
+    , code: <span class="number">0</span>
+    , first: <span class="number">0</span>
+    , count: <span class="number">0</span>
+    , index: <span class="number">0</span>
+    , last: <span class="number">0</span>
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-11">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-11">&#182;</a>
+              </div>
+              <p>Okay, cool. We&#39;re just about ready to hand back the stream.
+Set it up so that the first thing it does is to look for
+a stream header, and then cough up the stream.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  become(noop, {}, noop)
+  start_stream_header()
+
+  <span class="keyword">return</span> stream</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-12">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-12">&#182;</a>
+              </div>
+              <p>The most valuable function in all of programming
+history.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">noop</span><span class="params">()</span> {</span>
+
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-13">
+            <div class="annotation">
+              
+              <div class="pilwrap for-h2">
+                <a class="pilcrow" href="#section-13">&#182;</a>
+              </div>
+              <h2>calling things.</h2>
+<p>This kills the suspense I&#39;ve built up over the course
+of the last few comments. An explanation of our <code>_call_*</code>-y
+friends:</p>
+<p>Common wisdom when writing an API that may <em>some</em> of the time
+be synchronous and <em>some</em> of the time be asynchronous is to
+simply use <code>setTimeout</code> (or <code>setImmediate</code> in its various
+incarnations) to make it async <strong>all</strong> of the time.</p>
+<p>The problem is that yielding back to the event loop isn&#39;t free --
+it takes time. When you&#39;re dealing with something that is <em>usually</em>
+synchronous -- on the order of like, 90% of the time you&#39;ll have
+everything you need to complete a call -- waiting for the next event
+loop turn adds up to a lifetime&#39;s worth of wasted time.</p>
+<p>The next solution is to simply use callbacks directly! Instead of
+using <code>process.nextTick</code> and friends, you simply call the callback in
+the same turn!</p>
+<p>That&#39;ll work for some range of inputs -- specifically, when you know
+that you&#39;ll never be recursing more than <Maximum Recursion Depth> times
+in a single frame -- and you have a particular unerring trust in whoever
+is using your library (i.e., you don&#39;t expect to be several levels deep
+already!). But if the problem is truly such that it&#39;s <strong>usually</strong> synchronous,
+you&#39;ll run into <code>RecursionError</code>s galore.</p>
+<p>So instead, we&#39;re going to write a poor man&#39;s stack with TCO. For bonus points,
+instead of allocating new stack objects for each call, we&#39;ll reuse the same set
+over every call to these functions. The following functions setup the appropriate
+initial state for each call; while <code>become</code> and <code>unbecome</code> let us say &quot;do this, then
+become this once you&#39;re done&quot;. It also handles the async case for us -- the assumption
+is that since we&#39;ve got a stack of states around, we simply &quot;resume&quot; whenever we get
+more data -- which means that all of our states have to be tolerant of re-entrance.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">call_header</span><span class="params">()</span> {</span>
+    <span class="keyword">return</span> _call_header
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">call_bytes</span><span class="params">(need)</span> {</span>
+    _call_bytes.value.length = <span class="number">0</span>
+    _call_bytes.need = need
+    <span class="keyword">return</span> _call_bytes
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">call_bits</span><span class="params">(need)</span> {</span>
+    _call_bits.value = <span class="number">0</span>
+    _call_bits.need = need
+    <span class="keyword">return</span> _call_bits
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">call_codes</span><span class="params">(distcode, lencode)</span> {</span>
+    _call_codes.len =
+    _call_codes.dist =
+    _call_codes.symbol = <span class="number">0</span>
+    _call_codes.distcode = distcode
+    _call_codes.lencode = lencode
+    <span class="keyword">return</span> _call_codes
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">call_dynamic</span><span class="params">()</span> {</span>
+    _call_dynamic.distcode.symbol.length =
+    _call_dynamic.distcode.count.length =
+    _call_dynamic.lencode.symbol.length =
+    _call_dynamic.lencode.count.length =
+    _call_dynamic.lengths.length = <span class="number">0</span>
+    _call_dynamic.nlen = <span class="number">0</span>
+    _call_dynamic.ndist = <span class="number">0</span>
+    _call_dynamic.ncode = <span class="number">0</span>
+    _call_dynamic.index = <span class="number">0</span>
+    _call_dynamic.symbol = <span class="number">0</span>
+    _call_dynamic.len = <span class="number">0</span>
+    <span class="keyword">return</span> _call_dynamic
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">call_decode</span><span class="params">(h)</span> {</span>
+    _call_decode.huffman = h
+    _call_decode.first =
+    _call_decode.index =
+    _call_decode.index =
+    _call_decode.code = <span class="number">0</span>
+
+    _call_decode.len = <span class="number">1</span>
+    <span class="keyword">return</span> _call_decode
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-14">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-14">&#182;</a>
+              </div>
+              <p>Whenever we get data, we shove it onto the
+list of input. So long as we haven&#39;t ended the
+stream yet, we should try to get further along.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">write</span><span class="params">(buf)</span> {</span>
+    buffer.push(buf)
+    got += buf.length
+    <span class="keyword">if</span>(!ended) {
+      execute()
+    }
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">end</span><span class="params">()</span> {</span>
+    stream.queue(<span class="literal">null</span>)
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-15">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-15">&#182;</a>
+              </div>
+              <p>The core of the stream: when we get
+input (or resume), loop until we need input
+or have ended the stream. Do work by pulling
+the &quot;latest&quot; state off the stack, finding the
+function that represents it, and executing it.
+At the end of execution, reset the <code>need_input</code>
+flag to its default state.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">execute</span><span class="params">()</span> {</span>
+    <span class="keyword">do</span> {
+      states[<span class="number">0</span>].current()
+    } <span class="keyword">while</span>(!need_input &amp;&amp; !ended)
+    need_input = <span class="literal">false</span>
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">start_stream_header</span><span class="params">()</span> {</span>
+    become(bytes, call_bytes(<span class="number">2</span>), got_stream_header)
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">got_stream_header</span><span class="params">()</span> {</span>
+    <span class="keyword">var</span> cmf = state.last[<span class="number">0</span>]
+      , flg = state.last[<span class="number">1</span>]</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-16">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-16">&#182;</a>
+              </div>
+              <p>make sure that the header as a 16bit int is a multiple of 31.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>    <span class="keyword">if</span>((cmf &lt;<span class="xml"><span class="tag">&lt; <span class="attribute">8</span> | <span class="attribute">flg</span>) % <span class="attribute">31</span> !=<span class="value">=</span> <span class="attribute">0</span>) {
+      <span class="attribute">stream.emit</span>('<span class="attribute">error</span>', <span class="attribute">new</span> <span class="attribute">Error</span>(
+        '<span class="attribute">failed</span> <span class="attribute">header</span> <span class="attribute">check</span>'
+      ))
+      <span class="attribute">return</span>
+    }
+
+</span></pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-17">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-17">&#182;</a>
+              </div>
+              <p>if the fifth bit in &quot;FLG&quot; is set, then we should
+expect an <code>FDICT</code>, which we largely ignore because
+we are living free and unencumbered by reason.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>    <span class="keyword">if</span>(flg &amp; <span class="number">32</span>) {
+      <span class="keyword">return</span> become(bytes, call_bytes(<span class="number">4</span>), on_got_fdict)
+    }
+    <span class="keyword">return</span> become(bits, call_bits(<span class="number">1</span>), on_got_is_final)
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-18">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-18">&#182;</a>
+              </div>
+              <p>See? Told ya so.
+Theoretically this should give us an identifier to
+some canned data with which to pre-build a huffman tree.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">on_got_fdict</span><span class="params">()</span> {</span>
+    <span class="keyword">return</span> become(bits, call_bits(<span class="number">1</span>), on_got_is_final)
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-19">
+            <div class="annotation">
+              
+              <div class="pilwrap for-h2">
+                <a class="pilcrow" href="#section-19">&#182;</a>
+              </div>
+              <h2>The inflate block format</h2>
+<p>There are three kinds of blocks -- fixed, dynamic,
+and stored. We determine whether the block is the final
+block in the stream by looking at the first bit we have
+available to us. If it&#39;s 1, this is the last block, otherwise,
+get ready for more blocks.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">on_got_is_final</span><span class="params">()</span> {</span>
+    is_final = state.last
+    become(bits, call_bits(<span class="number">2</span>), on_got_type)
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-20">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-20">&#182;</a>
+              </div>
+              <p>We then take 2 bits to determine the block type.
+There are three possible types:</p>
+<ul>
+<li>&quot;stored&quot;: the simplest block type. discard the rest of this byte,
+and read 2 bytes representing the &quot;length&quot; of output following.
+then read 2 bytes representing the two&#39;s compliment of the length.
+(<code>len === ~nlen</code>), followed by <len> bytes of uncompressed
+output.</li>
+<li>&quot;fixed&quot;: use pre-canned huffman trees to generate output.</li>
+<li>&quot;dynamic&quot;: read the huffman trees from the stream, then use
+them to generate output.</li>
+</ul>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">on_got_type</span><span class="params">()</span> {</span>
+    <span class="keyword">if</span>(state.last === <span class="number">0</span>) {
+      become(bytes, call_bytes(<span class="number">4</span>), on_got_len_nlen)
+      <span class="keyword">return</span>
+    }
+
+    <span class="keyword">if</span>(state.last === <span class="number">1</span>) {</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-21">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-21">&#182;</a>
+              </div>
+              <p><code>fixed</code> and <code>dynamic</code> blocks both eventually delegate
+to the &quot;codes&quot; state -- which reads bits of input, throws
+them into a huffman tree, and produces &quot;symbols&quot; of output.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>      fixed_codes = fixed_codes || build_fixed()
+      become(start_codes, call_codes(
+        fixed_codes.distcode
+      , fixed_codes.lencode
+      ), done_with_codes)
+      <span class="keyword">return</span>
+    }
+
+    become(start_dynamic, call_dynamic(), done_with_codes)
+    <span class="keyword">return</span>
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-22">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-22">&#182;</a>
+              </div>
+              <p>Nothing too terribly surprising here.
+Of note: <code>len</code> can be zero. This can be used to
+byte-align other blocks.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">on_got_len_nlen</span><span class="params">()</span> {</span>
+    <span class="keyword">var</span> want = state.last[<span class="number">0</span>] | (state.last[<span class="number">1</span>] &lt;<span class="xml"><span class="tag">&lt; <span class="attribute">8</span>)
+      , <span class="attribute">nlen</span> = <span class="attribute">state.last</span>[<span class="attribute">2</span>] | (<span class="attribute">state.last</span>[<span class="attribute">3</span>] &lt;&lt; <span class="attribute">8</span>)
+
+    <span class="attribute">if</span>((~<span class="attribute">nlen</span> &amp; <span class="attribute">0xFFFF</span>) !=<span class="value">=</span> <span class="attribute">want</span>) {
+      <span class="attribute">return</span> <span class="attribute">stream.emit</span>('<span class="attribute">error</span>', <span class="attribute">new</span> <span class="attribute">Error</span>(
+        '<span class="attribute">failed</span> <span class="attribute">len</span> / <span class="attribute">nlen</span> <span class="attribute">check</span>'
+      ))
+    }
+
+    <span class="attribute">if</span>(!<span class="attribute">want</span>) {
+      <span class="attribute">become</span>(<span class="attribute">bits</span>, <span class="attribute">call_bits</span>(<span class="attribute">1</span>), <span class="attribute">on_got_is_final</span>)
+      <span class="attribute">return</span>
+    }
+    <span class="attribute">become</span>(<span class="attribute">bytes</span>, <span class="attribute">call_bytes</span>(<span class="attribute">want</span>), <span class="attribute">on_got_stored</span>)
+  }
+
+</span></pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-23">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-23">&#182;</a>
+              </div>
+              <p>We now have the stored data. We should either
+move on to checking that our checksum matches
+the stream checksum, or to the next block.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">on_got_stored</span><span class="params">()</span> {</span>
+    output_many(state.last)
+    <span class="keyword">if</span>(is_final) {
+      become(bytes, call_bytes(<span class="number">4</span>), on_got_adler)
+      <span class="keyword">return</span>
+    }
+    become(bits, call_bits(<span class="number">1</span>), on_got_is_final)
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-24">
+            <div class="annotation">
+              
+              <div class="pilwrap for-h2">
+                <a class="pilcrow" href="#section-24">&#182;</a>
+              </div>
+              <h2>Reading a dynamic block</h2>
+<p>for the next few functions, we read the huffman
+trees out of the input stream. this part also happens
+to give me a nosebleed.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">start_dynamic</span><span class="params">()</span> {</span>
+    become(bits, call_bits(<span class="number">5</span>), on_got_nlen)
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">on_got_nlen</span><span class="params">()</span> {</span>
+    state.nlen = state.last + <span class="number">257</span>
+    become(bits, call_bits(<span class="number">5</span>), on_got_ndist)
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">on_got_ndist</span><span class="params">()</span> {</span>
+    state.ndist = state.last + <span class="number">1</span>
+    become(bits, call_bits(<span class="number">4</span>), on_got_ncode)
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">on_got_ncode</span><span class="params">()</span> {</span>
+    state.ncode = state.last + <span class="number">4</span>
+    <span class="keyword">if</span>(state.nlen &gt; MAXLCODES || state.ndist &gt; MAXDCODES) {
+      stream.emit(<span class="string">'error'</span>, <span class="keyword">new</span> Error(<span class="string">'bad counts'</span>))
+      <span class="keyword">return</span>
+    }
+
+    become(bits, call_bits(<span class="number">3</span>), on_got_lengths_part)
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">on_got_lengths_part</span><span class="params">()</span> {</span>
+    state.lengths[order[state.index]] = state.last
+
+    ++state.index
+    <span class="keyword">if</span>(state.index === state.ncode) {
+      <span class="keyword">for</span>(; state.index &lt; <span class="number">19</span>; ++state.index) {
+        state.lengths[order[state.index]] = <span class="number">0</span>
+      }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-25">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-25">&#182;</a>
+              </div>
+              <p>temporarily construct the <code>lencode</code> using the
+lengths we&#39;ve read. we&#39;ll actually be using the
+symbols produced by throwing bits into the huffman
+tree to constuct the <code>lencode</code> and <code>distcode</code> huffman
+trees.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>      construct(state.lencode, state.lengths, <span class="number">19</span>)
+      state.index = <span class="number">0</span>
+
+      become(decode, call_decode(state.lencode), on_got_dynamic_symbol_iter)
+      <span class="keyword">return</span>
+    }
+    become(bits, call_bits(<span class="number">3</span>), on_got_lengths_part)
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">on_got_dynamic_symbol_iter</span><span class="params">()</span> {</span>
+    state.symbol = state.last
+
+    <span class="keyword">if</span>(state.symbol &lt; <span class="number">16</span>) {
+      state.lengths[state.index++] = state.symbol
+      do_check()
+      <span class="keyword">return</span>
+    }
+
+    state.len = <span class="number">0</span>
+    <span class="keyword">if</span>(state.symbol === <span class="number">16</span>) {
+      become(bits, call_bits(<span class="number">2</span>), on_got_dynamic_symbol_16)
+      <span class="keyword">return</span>
+    }
+
+    <span class="keyword">if</span>(state.symbol === <span class="number">17</span>) {
+      become(bits, call_bits(<span class="number">3</span>), on_got_dynamic_symbol_17)
+      <span class="keyword">return</span>
+    }
+
+    become(bits, call_bits(<span class="number">7</span>), on_got_dynamic_symbol)
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">on_got_dynamic_symbol_16</span><span class="params">()</span> {</span>
+    state.len = state.lengths[state.index - <span class="number">1</span>]
+    on_got_dynamic_symbol_17()
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">on_got_dynamic_symbol_17</span><span class="params">()</span> {</span>
+    state.symbol = <span class="number">3</span> + state.last
+    do_dynamic_end_loop()
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">on_got_dynamic_symbol</span><span class="params">()</span> {</span>
+    state.symbol = <span class="number">11</span> + state.last
+    do_dynamic_end_loop()
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">do_dynamic_end_loop</span><span class="params">()</span> {</span>
+    <span class="keyword">if</span>(state.index + state.symbol &gt; state.nlen + state.ndist) {
+      stream.emit(<span class="string">'error'</span>, <span class="keyword">new</span> Error(<span class="string">'too many lengths'</span>))
+      <span class="keyword">return</span>
+    }
+
+    <span class="keyword">while</span>(state.symbol--) {
+      state.lengths[state.index++] = state.len
+    }
+
+    do_check()
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">do_check</span><span class="params">()</span> {</span>
+    <span class="keyword">if</span>(state.index &gt;= state.nlen + state.ndist) {
+      end_read_dynamic()
+      <span class="keyword">return</span>
+    }
+    become(decode, call_decode(state.lencode), on_got_dynamic_symbol_iter)
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">end_read_dynamic</span><span class="params">()</span> {</span></pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-26">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-26">&#182;</a>
+              </div>
+              <p>okay, we can finally start reading data out of the stream.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>    construct(state.lencode, state.lengths, state.nlen)
+    construct(state.distcode, state.lengths.slice(state.nlen), state.ndist)
+    become(start_codes, call_codes(
+        state.distcode
+      , state.lencode
+    ), done_with_codes)
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">start_codes</span><span class="params">()</span> {</span>
+    become(decode, call_decode(state.lencode), on_got_codes_symbol)
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">on_got_codes_symbol</span><span class="params">()</span> {</span>
+    <span class="keyword">var</span> symbol = state.symbol = state.last
+    <span class="keyword">if</span>(symbol &lt; <span class="number">0</span>) {
+      stream.emit(<span class="string">'error'</span>, <span class="keyword">new</span> Error(<span class="string">'invalid symbol'</span>))
+      <span class="keyword">return</span>
+    }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-27">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-27">&#182;</a>
+              </div>
+              <p>literal output. in my experience, you&#39;ll usually see this
+at the start of a stream so we can start &quot;priming&quot; the output
+window for use later.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>    <span class="keyword">if</span>(symbol &lt; <span class="number">256</span>) {
+      output_one(symbol)
+      become(decode, call_decode(state.lencode), on_got_codes_symbol)
+      <span class="keyword">return</span>
+    }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-28">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-28">&#182;</a>
+              </div>
+              <p>this is fun. see <code>on_got_codes_len</code> for more.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>    <span class="keyword">if</span>(symbol &gt; <span class="number">256</span>) {
+      symbol = state.symbol -= <span class="number">257</span>
+      <span class="keyword">if</span>(symbol &gt;= <span class="number">29</span>) {
+        stream.emit(<span class="string">'error'</span>, <span class="keyword">new</span> Error(<span class="string">'invalid fixed code'</span>))
+        <span class="keyword">return</span>
+      }
+
+      become(bits, call_bits(lext[symbol]), on_got_codes_len)
+      <span class="keyword">return</span>
+    }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-29">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-29">&#182;</a>
+              </div>
+              <p>256 is a terminal symbol -- it means we&#39;re done with this block.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>    <span class="keyword">if</span>(symbol === <span class="number">256</span>) {
+      unbecome()
+      <span class="keyword">return</span>
+    }
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-30">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-30">&#182;</a>
+              </div>
+              <p>For symbols &gt; 256 we subtract 257 (so they start at 0 again).
+Then we use <code>lext</code> to see how many bits we need to read out of the stream
+to represent the &quot;extended length&quot;. Finally, we look at our hard-coded <code>lens</code>
+table with that 0-indexed symbol to get the base length, and add our &quot;extended
+length&quot; to that to get total length.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">on_got_codes_len</span><span class="params">()</span> {</span>
+    state.len = lens[state.symbol] + state.last
+    become(decode, call_decode(state.distcode), on_got_codes_dist_symbol)
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-31">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-31">&#182;</a>
+              </div>
+              <p>We then pull out a &quot;distance&quot; in much the same fashion.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">on_got_codes_dist_symbol</span><span class="params">()</span> {</span>
+    state.symbol = state.last
+    <span class="keyword">if</span>(state.symbol &lt; <span class="number">0</span>) {
+      stream.emit(<span class="string">'error'</span>, <span class="keyword">new</span> Error(<span class="string">'invalid distance symbol'</span>))
+      <span class="keyword">return</span>
+    }
+
+    become(bits, call_bits(dext[state.symbol]), on_got_codes_dist_dist)
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">on_got_codes_dist_dist</span><span class="params">()</span> {</span>
+    <span class="keyword">var</span> dist = dists[state.symbol] + state.last</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-32">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-32">&#182;</a>
+              </div>
+              <p>Once we have a &quot;distance&quot; and a &quot;length&quot;, we start to output bytes.
+We reach &quot;dist&quot; back from our current output position to get the byte
+we should repeat and output it (thus moving the output window cursor forward).
+Two notes:</p>
+<ol>
+<li>Theoretically we could overlap our output and input.</li>
+<li><code>X % (2^N) == X &amp; (2^N - 1)</code> with the distinction that
+the result of the bitwise AND won&#39;t be negative for the
+range of values we&#39;re feeding it. Spare a modulo, spoil the child.</li>
+</ol>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>    <span class="keyword">while</span>(state.len--) {
+      output_one(output[(output_idx - dist) &amp; WINDOW_MINUS_ONE])
+    }
+
+    become(decode, call_decode(state.lencode), on_got_codes_symbol)
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">done_with_codes</span><span class="params">()</span> {</span>
+    <span class="keyword">if</span>(is_final) {
+      become(bytes, call_bytes(<span class="number">4</span>), on_got_adler)
+      <span class="keyword">return</span>
+    }
+    become(bits, call_bits(<span class="number">1</span>), on_got_is_final)
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-33">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-33">&#182;</a>
+              </div>
+              <p>We only call this once we&#39;re done with the last block. It&#39;s
+just 4 bytes that should match up with what we&#39;ve calculated
+thus far for the adler checksum.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">on_got_adler</span><span class="params">()</span> {</span>
+    <span class="keyword">var</span> check_s1 = state.last[<span class="number">3</span>] | (state.last[<span class="number">2</span>] &lt;<span class="xml"><span class="tag">&lt; <span class="attribute">8</span>)
+      , <span class="attribute">check_s2</span> = <span class="attribute">state.last</span>[<span class="attribute">1</span>] | (<span class="attribute">state.last</span>[<span class="attribute">0</span>] &lt;&lt; <span class="attribute">8</span>)
+
+    <span class="attribute">if</span>(<span class="attribute">check_s2</span> !=<span class="value">=</span> <span class="attribute">adler_s2</span> || <span class="attribute">check_s1</span> !=<span class="value">=</span> <span class="attribute">adler_s1</span>) {
+      <span class="attribute">stream.emit</span>('<span class="attribute">error</span>', <span class="attribute">new</span> <span class="attribute">Error</span>(
+        '<span class="attribute">bad</span> <span class="attribute">adler</span> <span class="attribute">checksum:</span> '+[<span class="attribute">check_s2</span>, <span class="attribute">adler_s2</span>, <span class="attribute">check_s1</span>, <span class="attribute">adler_s1</span>]
+      ))
+      <span class="attribute">return</span>
+    }
+
+    <span class="attribute">ended</span> = <span class="attribute">true</span>
+
+    <span class="attribute">stream.emit</span>('<span class="attribute">unused</span>', [<span class="attribute">buffer</span>[<span class="attribute">0</span>]<span class="attribute">.slice</span>(<span class="attribute">buffer_offset</span>)]<span class="attribute">.concat</span>(<span class="attribute">buffer.slice</span>(<span class="attribute">1</span>)), <span class="attribute">bytes_read</span>)
+    <span class="attribute">output_idx</span> = <span class="attribute">0</span>
+    <span class="attribute">stream.queue</span>(<span class="attribute">null</span>)
+  }
+
+</span></pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-34">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-34">&#182;</a>
+              </div>
+              <p>&quot;decode&quot; is the state where symbols are generated given
+bits of input + a huffman tree.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">decode</span><span class="params">()</span> {</span>
+    _decode()
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">_decode</span><span class="params">()</span> {</span>
+    <span class="keyword">if</span>(state.len &gt; MAXBITS) {
+      stream.emit(<span class="string">'error'</span>, <span class="keyword">new</span> Error(<span class="string">'ran out of codes'</span>))
+      <span class="keyword">return</span>
+    }
+
+    become(bits, call_bits(<span class="number">1</span>), got_decode_bit)
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">got_decode_bit</span><span class="params">()</span> {</span>
+    state.code = (state.code | state.last) &gt;&gt;&gt; <span class="number">0</span>
+    state.count = state.huffman.count[state.len]
+    <span class="keyword">if</span>(state.code &lt; state.first + state.count) {
+      unbecome(state.huffman.symbol[state.index + (state.code - state.first)])
+      <span class="keyword">return</span>
+    }
+    state.index += state.count
+    state.first += state.count
+    state.first &lt;<span class="xml"><span class="tag">&lt;<span class="title">=</span> <span class="attribute">1</span>
+    <span class="attribute">state.code</span> = (<span class="attribute">state.code</span> &lt;&lt; <span class="attribute">1</span>) &gt;</span>&gt;&gt; 0
+    ++state.len
+    _decode()
+  }
+
+</span></pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-35">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-35">&#182;</a>
+              </div>
+              <p>The core of our &quot;poor man&#39;s stack&quot; functionality.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">become</span><span class="params">(fn, s, then)</span> {</span>
+    <span class="keyword">if</span>(<span class="keyword">typeof</span> then !== <span class="string">'function'</span>) {
+      <span class="keyword">throw</span> <span class="keyword">new</span> Error
+    }
+    states.unshift({
+      current: fn
+    , next: then
+    , state: state = s
+    })
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">unbecome</span><span class="params">(result)</span> {</span>
+    <span class="keyword">if</span>(states.length &gt; <span class="number">1</span>) {
+      states[<span class="number">1</span>].current = states[<span class="number">0</span>].next
+    }
+    states.shift()
+    <span class="keyword">if</span>(!states.length) {
+      ended = <span class="literal">true</span>
+
+      stream.emit(<span class="string">'unused'</span>, [buffer[<span class="number">0</span>].slice(buffer_offset)].concat(buffer.slice(<span class="number">1</span>)), bytes_read)
+      output_idx = <span class="number">0</span>
+      stream.queue(<span class="literal">null</span>)
+      <span class="keyword">return</span>
+    }
+    state = states[<span class="number">0</span>].state
+    state.last = result
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-36">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-36">&#182;</a>
+              </div>
+              <p>take N bits out of the stream (starting at the
+current bit offset).</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">bits</span><span class="params">()</span> {</span>
+    <span class="keyword">var</span> byt
+      , idx
+
+    idx = <span class="number">0</span>
+    state.value = bitbuf
+    <span class="keyword">while</span>(bitcnt &lt; state.need) {</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-37">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-37">&#182;</a>
+              </div>
+              <p>we do this to preserve <code>state.value</code> when
+&quot;need_input&quot; is tripped.</p>
+<p>fun fact: if we moved that into the <code>if</code> statement
+below, it would trigger a deoptimization of this (very
+hot) function. JITs!</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>      bitbuf = state.value
+      byt = take()
+      <span class="keyword">if</span>(need_input) {
+        <span class="keyword">break</span>
+      }
+      ++idx
+      state.value = (state.value | (byt &lt;<span class="xml"><span class="tag">&lt; <span class="attribute">bitcnt</span>)) &gt;</span>&gt;&gt; 0
+      bitcnt += 8
+    }
+
+    if(!need_input) {
+      bitbuf = state.value &gt;&gt;&gt; state.need
+      bitcnt -= state.need
+      unbecome((state.value &amp; ((1 <span class="tag">&lt;<span class="title">&lt;</span> <span class="attribute">state.need</span>) <span class="attribute">-</span> <span class="attribute">1</span>)) &gt;</span>&gt;&gt; 0)
+    }
+  }
+
+</span></pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-38">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-38">&#182;</a>
+              </div>
+              <p>take N bytes out of the stream, disregarding current bit
+offset.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">bytes</span><span class="params">()</span> {</span>
+    <span class="keyword">var</span> byte_accum = state.value
+      , value
+
+    <span class="keyword">while</span>(state.need--) {
+      value = take()</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-39">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-39">&#182;</a>
+              </div>
+              <p>Try not to <code>return</code> from multiple places, since
+that apparently gives the JIT a hard time.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>      <span class="keyword">if</span>(need_input) {
+        bitbuf = bitcnt = <span class="number">0</span>
+        state.need += <span class="number">1</span>
+        <span class="keyword">break</span>
+      }
+      byte_accum[byte_accum.length] = value
+    }
+    <span class="keyword">if</span>(!need_input) {
+      bitcnt = bitbuf = <span class="number">0</span>
+      unbecome(byte_accum)
+    }
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-40">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-40">&#182;</a>
+              </div>
+              <p><code>take</code> actually performs the &quot;taking&quot; of data from
+the input stream (and setting of the <code>needs_input</code> flag).</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">take</span><span class="params">()</span> {</span>
+    <span class="keyword">if</span>(!buffer.length) {
+      need_input = <span class="literal">true</span>
+      <span class="keyword">return</span>
+    }
+
+    <span class="keyword">if</span>(buffer_offset === buffer[<span class="number">0</span>].length) {
+      buffer.shift()
+      buffer_offset = <span class="number">0</span>
+      <span class="keyword">return</span> take()
+    }
+
+    ++bytes_read</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-41">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-41">&#182;</a>
+              </div>
+              <p>We use <code>readUInt8</code> for maximum compatibility with
+browserify.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>    <span class="keyword">return</span> bitbuf = buffer[<span class="number">0</span>].readUInt8(buffer_offset++)
+  }</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-42">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-42">&#182;</a>
+              </div>
+              <p>The output functions both output data as well as add it
+to the current checksum.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>  <span class="function"><span class="keyword">function</span> <span class="title">output_one</span><span class="params">(val)</span> {</span>
+    adler_s1 = (adler_s1 + val) % <span class="number">65521</span>
+    adler_s2 = (adler_s2 + adler_s1) % <span class="number">65521</span>
+    output[output_idx++] = val
+    output_idx &amp;= WINDOW_MINUS_ONE
+    stream.queue(<span class="keyword">new</span> Buffer([val]))
+  }
+
+  <span class="function"><span class="keyword">function</span> <span class="title">output_many</span><span class="params">(vals)</span> {</span>
+    <span class="keyword">var</span> len
+      , byt
+      , olen
+
+    <span class="keyword">for</span>(<span class="keyword">var</span> i = <span class="number">0</span>, len = vals.length; i &lt; len; ++i) {
+      byt = vals[i]
+      adler_s1 = (adler_s1 + byt) % <span class="number">65521</span>
+      adler_s2 = (adler_s2 + adler_s1) % <span class="number">65521</span>
+      output[output_idx++] = byt
+      output_idx &amp;= WINDOW_MINUS_ONE
+    }
+
+    stream.queue(<span class="keyword">new</span> Buffer(vals))
+  }
+}
+
+<span class="function"><span class="keyword">function</span> <span class="title">build_fixed</span><span class="params">()</span> {</span>
+  <span class="keyword">var</span> lencnt = []
+    , lensym = []
+    , distcnt = []
+    , distsym = []
+
+  <span class="keyword">var</span> lencode = {
+      count: lencnt
+    , symbol: lensym
+  }
+
+  <span class="keyword">var</span> distcode = {
+      count: distcnt
+    , symbol: distsym
+  }
+
+  <span class="keyword">var</span> lengths = []
+    , symbol
+
+  <span class="keyword">for</span>(symbol = <span class="number">0</span>; symbol &lt; <span class="number">144</span>; ++symbol) {
+    lengths[symbol] = <span class="number">8</span>
+  }
+  <span class="keyword">for</span>(; symbol &lt; <span class="number">256</span>; ++symbol) {
+    lengths[symbol] = <span class="number">9</span>
+  }
+  <span class="keyword">for</span>(; symbol &lt; <span class="number">280</span>; ++symbol) {
+    lengths[symbol] = <span class="number">7</span>
+  }
+  <span class="keyword">for</span>(; symbol &lt; FIXLCODES; ++symbol) {
+    lengths[symbol] = <span class="number">8</span>
+  }
+  construct(lencode, lengths, FIXLCODES)
+
+  <span class="keyword">for</span>(symbol = <span class="number">0</span>; symbol &lt; MAXDCODES; ++symbol) {
+    lengths[symbol] = <span class="number">5</span>
+  }
+  construct(distcode, lengths, MAXDCODES)
+  <span class="keyword">return</span> {lencode: lencode, distcode: distcode}
+}
+
+<span class="function"><span class="keyword">function</span> <span class="title">construct</span><span class="params">(huffman, lengths, num)</span> {</span>
+  <span class="keyword">var</span> symbol
+    , left
+    , offs
+    , len
+
+  offs = []
+
+  <span class="keyword">for</span>(len = <span class="number">0</span>; len &lt;= MAXBITS; ++len) {
+    huffman.count[len] = <span class="number">0</span>
+  }
+
+  <span class="keyword">for</span>(symbol = <span class="number">0</span>; symbol &lt; num; ++symbol) {
+    huffman.count[lengths[symbol]] += <span class="number">1</span>
+  }
+
+  <span class="keyword">if</span>(huffman.count[<span class="number">0</span>] === num) {
+    <span class="keyword">return</span>
+  }
+
+  left = <span class="number">1</span>
+  <span class="keyword">for</span>(len = <span class="number">1</span>; len &lt;= MAXBITS; ++len) {
+    left &lt;<span class="xml"><span class="tag">&lt;<span class="title">=</span> <span class="attribute">1</span>
+    <span class="attribute">left</span> <span class="attribute">-</span>= <span class="attribute">huffman.count</span>[<span class="attribute">len</span>]
+    <span class="attribute">if</span>(<span class="attribute">left</span> &lt; <span class="attribute">0</span>) {
+      <span class="attribute">return</span> <span class="attribute">left</span>
+    }
+  }
+
+  <span class="attribute">offs</span>[<span class="attribute">1</span>] = <span class="attribute">0</span>
+  <span class="attribute">for</span>(<span class="attribute">len</span> = <span class="attribute">1</span>; <span class="attribute">len</span> &lt; <span class="attribute">MAXBITS</span>; ++<span class="attribute">len</span>) {
+    <span class="attribute">offs</span>[<span class="attribute">len</span> + <span class="attribute">1</span>] = <span class="attribute">offs</span>[<span class="attribute">len</span>] + <span class="attribute">huffman.count</span>[<span class="attribute">len</span>]
+  }
+
+  <span class="attribute">for</span>(<span class="attribute">symbol</span> = <span class="attribute">0</span>; <span class="attribute">symbol</span> &lt; <span class="attribute">num</span>; ++<span class="attribute">symbol</span>) {
+    <span class="attribute">if</span>(<span class="attribute">lengths</span>[<span class="attribute">symbol</span>] !=<span class="value">=</span> <span class="attribute">0</span>) {
+      <span class="attribute">huffman.symbol</span>[<span class="attribute">offs</span>[<span class="attribute">lengths</span>[<span class="attribute">symbol</span>]]++] = <span class="attribute">symbol</span>
+    }
+  }
+
+  <span class="attribute">return</span> <span class="attribute">left</span>
+}
+
+</span></pre></div></div>
+            
+        </li>
+        
+    </ul>
+  </div>
+</body>
+</html>
