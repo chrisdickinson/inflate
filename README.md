@@ -25,6 +25,10 @@ create an inflate stream. each inflate stream carries a 32k memory overhead (for
 create a new inflate stream that recycles the output window (and JIT warmup) from the previous
 inflate stream.
 
+## history
+
+[here's the starting point, and then an intermediate point on the way to this package.](https://gist.github.com/chrisdickinson/a5feecd1906b15638d50)
+
 ## License
 
 MIT
