@@ -27,18 +27,14 @@
 <a href="http://svn.ghostscript.com/ghostscript/trunk/gs/zlib/contrib/puff/puff.c">puff.c</a>
 which provided the basis for the first version of this code (available under the
 ZLIB license).</p>
-<p>And, of course, the <a href="http://www.ietf.org/rfc/rfc1950.txt">RFC</a> makes for
+<p>The <a href="http://www.ietf.org/rfc/rfc1950.txt">RFC</a> makes for
 some cozy bedtime reading.</p>
-<p>To start with, let&#39;s require @dominictarr&#39;s <a href="http://npm.im/through">through</a>.
-It simplifies stream creation in Node.JS 0.8.X, and is compatible with newer Node.JS
-versions.</p>
+<p>The source is available <a href="https://github.com/chrisdickinson/inflate">on github</a>;
+and the package is <a href="http://npm.im/inflate">on npm</a>.</p>
 
             </div>
             
-            <div class="content"><div class='highlight'><pre>module.exports = inflate
-
-<span class="keyword">var</span> through = require(<span class="string">'through'</span>)
-  , Buffer = require(<span class="string">'buffer'</span>).Buffer</pre></div></div>
+            <div class="content"><div class='highlight'><pre>module.exports = inflate</pre></div></div>
             
         </li>
         
@@ -48,6 +44,24 @@ versions.</p>
               
               <div class="pilwrap ">
                 <a class="pilcrow" href="#section-2">&#182;</a>
+              </div>
+              <p>To start with, let&#39;s require @dominictarr&#39;s <a href="http://npm.im/through">through</a>.
+It simplifies stream creation in Node.JS 0.8.X, and is compatible with newer Node.JS
+versions.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre><span class="keyword">var</span> through = require(<span class="string">'through'</span>)
+  , Buffer = require(<span class="string">'buffer'</span>).Buffer</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-3">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-3">&#182;</a>
               </div>
               <p>Some constants. If you&#39;d like to let your page slowly scroll down and go get some
 coffee now, I wouldn&#39;t mind. I&#39;ll wait.</p>
@@ -89,11 +103,11 @@ coffee now, I wouldn&#39;t mind. I&#39;ll wait.</p>
         </li>
         
         
-        <li id="section-3">
+        <li id="section-4">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-3">&#182;</a>
+                <a class="pilcrow" href="#section-4">&#182;</a>
               </div>
               <p>So, inflate is predicated on the idea that we&#39;re able to reach
 back into things we&#39;ve previously output to create new output --
@@ -116,11 +130,11 @@ bytes is the largest size (AFAIK), so we set that here.</p>
         </li>
         
         
-        <li id="section-4">
+        <li id="section-5">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-4">&#182;</a>
+                <a class="pilcrow" href="#section-5">&#182;</a>
               </div>
               <p>Initialize the output window, the stream itself,
 as well as other bookkeeping.</p>
@@ -157,11 +171,11 @@ to ping back and forth within it and avoid unnecessary garbage creation.</li>
         </li>
         
         
-        <li id="section-5">
+        <li id="section-6">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-5">&#182;</a>
+                <a class="pilcrow" href="#section-6">&#182;</a>
               </div>
               <p>We&#39;re going to be reading a lot of individual bits.
 <code>bitcnt</code> keeps track of how many bits we have available
@@ -181,11 +195,11 @@ of a call to <code>fixed</code>, essentially.</p>
         </li>
         
         
-        <li id="section-6">
+        <li id="section-7">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-6">&#182;</a>
+                <a class="pilcrow" href="#section-7">&#182;</a>
               </div>
               <p>Oh, and we&#39;re checksumming everything we output to make sure
 that when we get to the 4-byte adler check at the end of the stream,
@@ -200,11 +214,11 @@ horrible, streaming teeth when we were producing output earlier.</p>
         </li>
         
         
-        <li id="section-7">
+        <li id="section-8">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-7">&#182;</a>
+                <a class="pilcrow" href="#section-8">&#182;</a>
               </div>
               <p>These are here to pique your interest and as a side effect
 prevent some global leakage. Mystery abounds!</p>
@@ -221,11 +235,11 @@ prevent some global leakage. Mystery abounds!</p>
         </li>
         
         
-        <li id="section-8">
+        <li id="section-9">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-8">&#182;</a>
+                <a class="pilcrow" href="#section-9">&#182;</a>
               </div>
               <p>If at any point our stream pauses (the next item in the chain
 of pipes can&#39;t accept any data at the moment), we&#39;ll need to be
@@ -241,11 +255,11 @@ sets up that behavior.</p>
         </li>
         
         
-        <li id="section-9">
+        <li id="section-10">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-9">&#182;</a>
+                <a class="pilcrow" href="#section-10">&#182;</a>
               </div>
               <p>Sort of an aside:
 When you define functions-within-a-function, they really,
@@ -286,11 +300,11 @@ the GC doesn&#39;t have a field day and slurp up all of our cycles.</p>
         </li>
         
         
-        <li id="section-10">
+        <li id="section-11">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-10">&#182;</a>
+                <a class="pilcrow" href="#section-11">&#182;</a>
               </div>
               <p>The mystery deepens.</p>
 
@@ -347,11 +361,11 @@ the GC doesn&#39;t have a field day and slurp up all of our cycles.</p>
         </li>
         
         
-        <li id="section-11">
+        <li id="section-12">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-11">&#182;</a>
+                <a class="pilcrow" href="#section-12">&#182;</a>
               </div>
               <p>Okay, cool. We&#39;re just about ready to hand back the stream.
 Set it up so that the first thing it does is to look for
@@ -367,11 +381,11 @@ a stream header, and then cough up the stream.</p>
         </li>
         
         
-        <li id="section-12">
+        <li id="section-13">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-12">&#182;</a>
+                <a class="pilcrow" href="#section-13">&#182;</a>
               </div>
               <p>The most valuable function in all of programming
 history.</p>
@@ -385,11 +399,11 @@ history.</p>
         </li>
         
         
-        <li id="section-13">
+        <li id="section-14">
             <div class="annotation">
               
               <div class="pilwrap for-h2">
-                <a class="pilcrow" href="#section-13">&#182;</a>
+                <a class="pilcrow" href="#section-14">&#182;</a>
               </div>
               <h2>calling things.</h2>
 <p>This kills the suspense I&#39;ve built up over the course
@@ -477,11 +491,11 @@ more data -- which means that all of our states have to be tolerant of re-entran
         </li>
         
         
-        <li id="section-14">
+        <li id="section-15">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-14">&#182;</a>
+                <a class="pilcrow" href="#section-15">&#182;</a>
               </div>
               <p>Whenever we get data, we shove it onto the
 list of input. So long as we haven&#39;t ended the
@@ -504,11 +518,11 @@ stream yet, we should try to get further along.</p>
         </li>
         
         
-        <li id="section-15">
+        <li id="section-16">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-15">&#182;</a>
+                <a class="pilcrow" href="#section-16">&#182;</a>
               </div>
               <p>The core of the stream: when we get
 input (or resume), loop until we need input
@@ -538,11 +552,11 @@ flag to its default state.</p>
         </li>
         
         
-        <li id="section-16">
+        <li id="section-17">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-16">&#182;</a>
+                <a class="pilcrow" href="#section-17">&#182;</a>
               </div>
               <p>make sure that the header as a 16bit int is a multiple of 31.</p>
 
@@ -560,11 +574,11 @@ flag to its default state.</p>
         </li>
         
         
-        <li id="section-17">
+        <li id="section-18">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-17">&#182;</a>
+                <a class="pilcrow" href="#section-18">&#182;</a>
               </div>
               <p>if the fifth bit in &quot;FLG&quot; is set, then we should
 expect an <code>FDICT</code>, which we largely ignore because
@@ -581,11 +595,11 @@ we are living free and unencumbered by reason.</p>
         </li>
         
         
-        <li id="section-18">
+        <li id="section-19">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-18">&#182;</a>
+                <a class="pilcrow" href="#section-19">&#182;</a>
               </div>
               <p>See? Told ya so.
 Theoretically this should give us an identifier to
@@ -600,11 +614,11 @@ some canned data with which to pre-build a huffman tree.</p>
         </li>
         
         
-        <li id="section-19">
+        <li id="section-20">
             <div class="annotation">
               
               <div class="pilwrap for-h2">
-                <a class="pilcrow" href="#section-19">&#182;</a>
+                <a class="pilcrow" href="#section-20">&#182;</a>
               </div>
               <h2>The inflate block format</h2>
 <p>There are three kinds of blocks -- fixed, dynamic,
@@ -623,11 +637,11 @@ get ready for more blocks.</p>
         </li>
         
         
-        <li id="section-20">
+        <li id="section-21">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-20">&#182;</a>
+                <a class="pilcrow" href="#section-21">&#182;</a>
               </div>
               <p>We then take 2 bits to determine the block type.
 There are three possible types:</p>
@@ -655,11 +669,11 @@ them to generate output.</li>
         </li>
         
         
-        <li id="section-21">
+        <li id="section-22">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-21">&#182;</a>
+                <a class="pilcrow" href="#section-22">&#182;</a>
               </div>
               <p><code>fixed</code> and <code>dynamic</code> blocks both eventually delegate
 to the &quot;codes&quot; state -- which reads bits of input, throws
@@ -682,11 +696,11 @@ them into a huffman tree, and produces &quot;symbols&quot; of output.</p>
         </li>
         
         
-        <li id="section-22">
+        <li id="section-23">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-22">&#182;</a>
+                <a class="pilcrow" href="#section-23">&#182;</a>
               </div>
               <p>Nothing too terribly surprising here.
 Of note: <code>len</code> can be zero. This can be used to
@@ -716,11 +730,11 @@ byte-align other blocks.</p>
         </li>
         
         
-        <li id="section-23">
+        <li id="section-24">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-23">&#182;</a>
+                <a class="pilcrow" href="#section-24">&#182;</a>
               </div>
               <p>We now have the stored data. We should either
 move on to checking that our checksum matches
@@ -740,11 +754,11 @@ the stream checksum, or to the next block.</p>
         </li>
         
         
-        <li id="section-24">
+        <li id="section-25">
             <div class="annotation">
               
               <div class="pilwrap for-h2">
-                <a class="pilcrow" href="#section-24">&#182;</a>
+                <a class="pilcrow" href="#section-25">&#182;</a>
               </div>
               <h2>Reading a dynamic block</h2>
 <p>for the next few functions, we read the huffman
@@ -789,11 +803,11 @@ to give me a nosebleed.</p>
         </li>
         
         
-        <li id="section-25">
+        <li id="section-26">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-25">&#182;</a>
+                <a class="pilcrow" href="#section-26">&#182;</a>
               </div>
               <p>temporarily construct the <code>lencode</code> using the
 lengths we&#39;ve read. we&#39;ll actually be using the
@@ -876,11 +890,11 @@ trees.</p>
         </li>
         
         
-        <li id="section-26">
+        <li id="section-27">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-26">&#182;</a>
+                <a class="pilcrow" href="#section-27">&#182;</a>
               </div>
               <p>okay, we can finally start reading data out of the stream.</p>
 
@@ -908,11 +922,11 @@ trees.</p>
         </li>
         
         
-        <li id="section-27">
+        <li id="section-28">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-27">&#182;</a>
+                <a class="pilcrow" href="#section-28">&#182;</a>
               </div>
               <p>literal output. in my experience, you&#39;ll usually see this
 at the start of a stream so we can start &quot;priming&quot; the output
@@ -929,11 +943,11 @@ window for use later.</p>
         </li>
         
         
-        <li id="section-28">
+        <li id="section-29">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-28">&#182;</a>
+                <a class="pilcrow" href="#section-29">&#182;</a>
               </div>
               <p>this is fun. see <code>on_got_codes_len</code> for more.</p>
 
@@ -953,11 +967,11 @@ window for use later.</p>
         </li>
         
         
-        <li id="section-29">
+        <li id="section-30">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-29">&#182;</a>
+                <a class="pilcrow" href="#section-30">&#182;</a>
               </div>
               <p>256 is a terminal symbol -- it means we&#39;re done with this block.</p>
 
@@ -972,11 +986,11 @@ window for use later.</p>
         </li>
         
         
-        <li id="section-30">
+        <li id="section-31">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-30">&#182;</a>
+                <a class="pilcrow" href="#section-31">&#182;</a>
               </div>
               <p>For symbols &gt; 256 we subtract 257 (so they start at 0 again).
 Then we use <code>lext</code> to see how many bits we need to read out of the stream
@@ -994,11 +1008,11 @@ length&quot; to that to get total length.</p>
         </li>
         
         
-        <li id="section-31">
+        <li id="section-32">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-31">&#182;</a>
+                <a class="pilcrow" href="#section-32">&#182;</a>
               </div>
               <p>We then pull out a &quot;distance&quot; in much the same fashion.</p>
 
@@ -1020,11 +1034,11 @@ length&quot; to that to get total length.</p>
         </li>
         
         
-        <li id="section-32">
+        <li id="section-33">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-32">&#182;</a>
+                <a class="pilcrow" href="#section-33">&#182;</a>
               </div>
               <p>Once we have a &quot;distance&quot; and a &quot;length&quot;, we start to output bytes.
 We reach &quot;dist&quot; back from our current output position to get the byte
@@ -1057,11 +1071,11 @@ range of values we&#39;re feeding it. Spare a modulo, spoil the child.</li>
         </li>
         
         
-        <li id="section-33">
+        <li id="section-34">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-33">&#182;</a>
+                <a class="pilcrow" href="#section-34">&#182;</a>
               </div>
               <p>We only call this once we&#39;re done with the last block. It&#39;s
 just 4 bytes that should match up with what we&#39;ve calculated
@@ -1092,11 +1106,11 @@ thus far for the adler checksum.</p>
         </li>
         
         
-        <li id="section-34">
+        <li id="section-35">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-34">&#182;</a>
+                <a class="pilcrow" href="#section-35">&#182;</a>
               </div>
               <p>&quot;decode&quot; is the state where symbols are generated given
 bits of input + a huffman tree.</p>
@@ -1136,11 +1150,11 @@ bits of input + a huffman tree.</p>
         </li>
         
         
-        <li id="section-35">
+        <li id="section-36">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-35">&#182;</a>
+                <a class="pilcrow" href="#section-36">&#182;</a>
               </div>
               <p>The core of our &quot;poor man&#39;s stack&quot; functionality.</p>
 
@@ -1177,11 +1191,11 @@ bits of input + a huffman tree.</p>
         </li>
         
         
-        <li id="section-36">
+        <li id="section-37">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-36">&#182;</a>
+                <a class="pilcrow" href="#section-37">&#182;</a>
               </div>
               <p>take N bits out of the stream (starting at the
 current bit offset).</p>
@@ -1199,11 +1213,11 @@ current bit offset).</p>
         </li>
         
         
-        <li id="section-37">
+        <li id="section-38">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-37">&#182;</a>
+                <a class="pilcrow" href="#section-38">&#182;</a>
               </div>
               <p>we do this to preserve <code>state.value</code> when
 &quot;need_input&quot; is tripped.</p>
@@ -1235,11 +1249,11 @@ hot) function. JITs!</p>
         </li>
         
         
-        <li id="section-38">
+        <li id="section-39">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-38">&#182;</a>
+                <a class="pilcrow" href="#section-39">&#182;</a>
               </div>
               <p>take N bytes out of the stream, disregarding current bit
 offset.</p>
@@ -1256,11 +1270,11 @@ offset.</p>
         </li>
         
         
-        <li id="section-39">
+        <li id="section-40">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-39">&#182;</a>
+                <a class="pilcrow" href="#section-40">&#182;</a>
               </div>
               <p>Try not to <code>return</code> from multiple places, since
 that apparently gives the JIT a hard time.</p>
@@ -1283,11 +1297,11 @@ that apparently gives the JIT a hard time.</p>
         </li>
         
         
-        <li id="section-40">
+        <li id="section-41">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-40">&#182;</a>
+                <a class="pilcrow" href="#section-41">&#182;</a>
               </div>
               <p><code>take</code> actually performs the &quot;taking&quot; of data from
 the input stream (and setting of the <code>needs_input</code> flag).</p>
@@ -1311,11 +1325,11 @@ the input stream (and setting of the <code>needs_input</code> flag).</p>
         </li>
         
         
-        <li id="section-41">
+        <li id="section-42">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-41">&#182;</a>
+                <a class="pilcrow" href="#section-42">&#182;</a>
               </div>
               <p>We use <code>readUInt8</code> for maximum compatibility with
 browserify.</p>
@@ -1328,11 +1342,11 @@ browserify.</p>
         </li>
         
         
-        <li id="section-42">
+        <li id="section-43">
             <div class="annotation">
               
               <div class="pilwrap ">
-                <a class="pilcrow" href="#section-42">&#182;</a>
+                <a class="pilcrow" href="#section-43">&#182;</a>
               </div>
               <p>The output functions both output data as well as add it
 to the current checksum.</p>
