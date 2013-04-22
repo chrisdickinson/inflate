@@ -1,10 +1,9 @@
-module.exports = inflate
-
 // # inflate
 //
 // a tale in several (horrifying?) parts.
-// first things first: infinite thanks to Mark Adler's 
-// [puff.c](http://svn.ghostscript.com/ghostscript/trunk/gs/zlib/contrib/puff/puff.c) 
+//
+// first thing's first: infinite thanks to Mark Adler's
+// [puff.c](http://svn.ghostscript.com/ghostscript/trunk/gs/zlib/contrib/puff/puff.c)
 // which provided the basis for the first version of this code (available under the
 // ZLIB license).
 //
@@ -14,6 +13,8 @@ module.exports = inflate
 // To start with, let's require @dominictarr's [through](http://npm.im/through).
 // It simplifies stream creation in Node.JS 0.8.X, and is compatible with newer Node.JS
 // versions.
+module.exports = inflate
+
 var through = require('through')
   , Buffer = require('buffer').Buffer
 
@@ -50,7 +51,6 @@ var dext = [
 var order = [
   16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15
 ]
-
 // So, inflate is predicated on the idea that we're able to reach
 // back into things we've previously output to create new output --
 // that is, if we output "tree" at some point, instead of ever having
@@ -70,7 +70,7 @@ function inflate() {
   // as well as other bookkeeping.
   //
   // * `buffer` keeps a list of all `Buffer` instances received
-  //   by `write`. We drop buffers out of that list when we've 
+  //   by `write`. We drop buffers out of that list when we've
   //   exhausted them (slicing each buffer each time would create
   //   too much garbage, and in newer versions of browserify, "slice"
   //   incurs a copy operation -- which would kill perf.)
@@ -99,7 +99,7 @@ function inflate() {
   // to us, while `bitbuf` stores the remainder of the last byte
   // that we didn't read.
   // `is_final` keeps track of whether the current zlib block is
-  // the last in the stream. Finally, `fixed_codes` is the memoization
+  // the last in the stream. Finally, `fixed_codes` is the memoization 
   // of a call to `fixed`, essentially.
   var bitbuf = 0
     , bitcnt = 0
@@ -235,7 +235,7 @@ function inflate() {
   //
   // Common wisdom when writing an API that may *some* of the time
   // be synchronous and *some* of the time be asynchronous is to
-  // simply use `setTimeout` (or `setImmediate` in its various 
+  // simply use `setTimeout` (or `setImmediate` in its various
   // incarnations) to make it async **all** of the time.
   //
   // The problem is that yielding back to the event loop isn't free --
@@ -304,7 +304,7 @@ function inflate() {
 
   function call_decode(h) {
     _call_decode.huffman = h
-    _call_decode.first = 
+    _call_decode.first =
     _call_decode.index =
     _call_decode.index =
     _call_decode.code = 0
@@ -328,13 +328,13 @@ function inflate() {
     stream.queue(null)
   }
 
-  // The core of the functionality: when we get 
+  // The core of the stream: when we get
   // input (or resume), loop until we need input
   // or have ended the stream. Do work by pulling
   // the "latest" state off the stack, finding the
   // function that represents it, and executing it.
   // At the end of execution, reset the `need_input`
-  // flag to its default state. 
+  // flag to its default state.
   function execute() {
     do {
       states[0].current()
@@ -367,10 +367,10 @@ function inflate() {
     return become(bits, call_bits(1), on_got_is_final)
   }
 
+  // See? Told ya so.
+  // Theoretically this should give us an identifier to
+  // some canned data with which to pre-build a huffman tree.
   function on_got_fdict() {
-    // See? Told ya so. 
-    // In reality this should give us an identifier to
-    // prepopulate a huffman tree with(?)
     return become(bits, call_bits(1), on_got_is_final)
   }
 
@@ -421,7 +421,7 @@ function inflate() {
 
   // Nothing too terribly surprising here.
   // Of note: `len` can be zero. This can be used to
-  // byte-align other blocks. 
+  // byte-align other blocks.
   function on_got_len_nlen() {
     var want = state.last[0] | (state.last[1] << 8)
       , nlen = state.last[2] | (state.last[3] << 8)
@@ -451,6 +451,8 @@ function inflate() {
     become(bits, call_bits(1), on_got_is_final)
   }
 
+  // ## Reading a dynamic block
+  //
   // for the next few functions, we read the huffman
   // trees out of the input stream. this part also happens
   // to give me a nosebleed.
@@ -669,7 +671,7 @@ function inflate() {
         'bad adler checksum: '+[check_s2, adler_s2, check_s1, adler_s1]
       ))
       return
-    } 
+    }
 
     ended = true
 
@@ -777,6 +779,8 @@ function inflate() {
 
     while(state.need--) {
       value = take()
+      // Try not to `return` from multiple places, since
+      // that apparently gives the JIT a hard time.
       if(need_input) {
         bitbuf = bitcnt = 0
         state.need += 1
@@ -795,7 +799,7 @@ function inflate() {
   function take() {
     if(!buffer.length) {
       need_input = true
-      return 
+      return
     }
 
     if(buffer_offset === buffer[0].length) {
@@ -805,11 +809,12 @@ function inflate() {
     }
 
     ++bytes_read
+
+    // We use `readUInt8` for maximum compatibility with
+    // browserify.
     return bitbuf = buffer[0].readUInt8(buffer_offset++)
   }
 
-  // ### The output functions
-  //
   // The output functions both output data as well as add it
   // to the current checksum.
   function output_one(val) {
