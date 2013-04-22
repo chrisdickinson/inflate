@@ -2,6 +2,9 @@
 
 streaming inflate in pure javascript (as a [through](http://npm.im/through) stream).
 
+the source code [is annotated](http://didact.us/inflate/). be forewarned, it is full of
+bats and rusty nails and goblins and things.
+
 ```javascript
 var inflate = require('inflate')
 
