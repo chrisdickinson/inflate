@@ -1,0 +1,25 @@
+{
+  "name": "inflate",
+  "version": "0.0.0",
+  "description": "pure javascript inflate implemented as a through stream",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/chrisdickinson/inflate.git"
+  },
+  "keywords": [
+    "inflate",
+    "zlib",
+    "stream",
+    "through"
+  ],
+  "author": "Chris Dickinson <chris@neversaw.us>",
+  "license": "MIT",
+  "gitHead": "cd7c4e835ef6fe9eb89e854dfbde36d38ce86e91",
+  "dependencies": {
+    "through": "~2.2.7"
+  }
+}
