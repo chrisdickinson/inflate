@@ -51,8 +51,6 @@ function inflate() {
     , buffer = []
     , got = 0
 
-  var all = []
-
   var bitbuf = 0
     , bitcnt = 0
     , is_final = false
@@ -205,7 +203,6 @@ function inflate() {
   }
 
   function write(buf) {
-    all.push(buf)
     buffer.push(buf)
     got += buf.length
     if(!ended) {
