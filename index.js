@@ -320,6 +320,9 @@ function inflate() {
   // list of input. So long as we haven't ended the
   // stream yet, we should try to get further along.
   function write(buf) {
+    if(buf[0] === undefined) {
+      takebyte = takebyte_buffer
+    }
     buffer.push(buf)
     got += buf.length
     if(!ended) {
@@ -678,7 +681,14 @@ function inflate() {
 
     ended = true
 
-    stream.emit('unused', [buffer[0].slice(buffer_offset)].concat(buffer.slice(1)), bytes_read)
+    if(stream.listeners('unused').length) {
+      stream.emit(
+          'unused'
+        , [buffer[0].slice(buffer_offset)].concat(buffer.slice(1))
+        , bytes_read
+      )
+    }
+
     output_idx = 0
     stream.queue(null)
   }
@@ -733,7 +743,13 @@ function inflate() {
     if(!states.length) {
       ended = true
 
-      stream.emit('unused', [buffer[0].slice(buffer_offset)].concat(buffer.slice(1)), bytes_read)
+      if(stream.listeners('unused').length) {
+        stream.emit(
+            'unused'
+          , [buffer[0].slice(buffer_offset)].concat(buffer.slice(1))
+          , bytes_read
+        )
+      }
       output_idx = 0
       stream.queue(null)
       return
@@ -813,9 +829,17 @@ function inflate() {
 
     ++bytes_read
 
+    return bitbuf = takebyte()
+  }
+
+  function takebyte_buffer() {
     // We use `readUInt8` for maximum compatibility with
     // browserify.
-    return bitbuf = buffer[0].readUInt8(buffer_offset++)
+    return buffer[0].readUInt8(buffer_offset++)
+  }
+
+  function takebyte() {
+    return buffer[0][buffer_offset++]
   }
 
   // The output functions both output data as well as add it
