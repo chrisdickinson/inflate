@@ -1,4 +1,4 @@
-var inflate = require('./index')
+var inflate = require('../index')
   , domnode = require('domnode-dom')
   , through = require('through')
 
