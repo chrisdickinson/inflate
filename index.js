@@ -19,7 +19,7 @@ module.exports = inflate
 // It simplifies stream creation in Node.JS 0.8.X, and is compatible with newer Node.JS
 // versions.
 var through = require('through')
-  , Buffer = require('buffer').Buffer
+  , binary = require('bops')
 
 // Some constants. If you'd like to let your page slowly scroll down and go get some
 // coffee now, I wouldn't mind. I'll wait.
@@ -320,9 +320,6 @@ function inflate() {
   // list of input. So long as we haven't ended the
   // stream yet, we should try to get further along.
   function write(buf) {
-    if(buf[0] === undefined) {
-      takebyte = takebyte_buffer
-    }
     buffer.push(buf)
     got += buf.length
     if(!ended) {
@@ -684,7 +681,7 @@ function inflate() {
     if(stream.listeners('unused').length) {
       stream.emit(
           'unused'
-        , [buffer[0].slice(buffer_offset)].concat(buffer.slice(1))
+        , [binary.subarray(buffer[0], buffer_offset)].concat(buffer.slice(1))
         , bytes_read
       )
     }
@@ -746,7 +743,7 @@ function inflate() {
       if(stream.listeners('unused').length) {
         stream.emit(
             'unused'
-          , [buffer[0].slice(buffer_offset)].concat(buffer.slice(1))
+          , [binary.subarray(buffer[0], buffer_offset)].concat(buffer.slice(1))
           , bytes_read
         )
       }
@@ -832,12 +829,6 @@ function inflate() {
     return bitbuf = takebyte()
   }
 
-  function takebyte_buffer() {
-    // We use `readUInt8` for maximum compatibility with
-    // browserify.
-    return buffer[0].readUInt8(buffer_offset++)
-  }
-
   function takebyte() {
     return buffer[0][buffer_offset++]
   }
@@ -849,7 +840,7 @@ function inflate() {
     adler_s2 = (adler_s2 + adler_s1) % 65521
     output[output_idx++] = val
     output_idx &= WINDOW_MINUS_ONE
-    stream.queue(new Buffer([val]))
+    stream.queue(binary.from([val]))
   }
 
   function output_many(vals) {
@@ -865,7 +856,7 @@ function inflate() {
       output_idx &= WINDOW_MINUS_ONE
     }
 
-    stream.queue(new Buffer(vals))
+    stream.queue(binary.from(vals))
   }
 }
 
