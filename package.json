@@ -21,6 +21,6 @@
   "gitHead": "cd7c4e835ef6fe9eb89e854dfbde36d38ce86e91",
   "dependencies": {
     "through": "~2.2.7",
-    "bops": "0.0.1"
+    "bops": "0.0.2"
   }
 }
