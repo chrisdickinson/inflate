@@ -96,6 +96,11 @@ function inflate() {
     , states = []
     , buffer = []
     , got = 0
+ 
+  // buffer up to 128k "output one" bytes 
+  var OUTPUT_ONE_LENGTH = 131070
+    , output_one_offs = OUTPUT_ONE_LENGTH
+    , output_one_buf
 
   // We're going to be reading a lot of individual bits.
   // `bitcnt` keeps track of how many bits we have available
@@ -160,6 +165,7 @@ function inflate() {
     got = 0
     adler_s1 = 1
     adler_s2 = 0
+    output_one_offs = 0
     become(noop, {}, noop)
     start_stream_header()
     out = through(write, end)
@@ -678,6 +684,8 @@ function inflate() {
 
     ended = true
 
+    output_one_recycle()
+
     if(stream.listeners('unused').length) {
       stream.emit(
           'unused'
@@ -740,6 +748,7 @@ function inflate() {
     if(!states.length) {
       ended = true
 
+      output_one_recycle()
       if(stream.listeners('unused').length) {
         stream.emit(
             'unused'
@@ -840,7 +849,26 @@ function inflate() {
     adler_s2 = (adler_s2 + adler_s1) % 65521
     output[output_idx++] = val
     output_idx &= WINDOW_MINUS_ONE
-    stream.queue(binary.from([val]))
+    output_one_pool(val)
+  }
+
+  function output_one_pool(val) {
+    if(output_one_offs === OUTPUT_ONE_LENGTH) {
+      output_one_recycle()
+    }
+
+    output_one_buf[output_one_offs++] = val 
+  }
+
+  function output_one_recycle() {
+    if(output_one_offs > 0) {
+      if(output_one_buf) {
+        stream.queue(binary.subarray(output_one_buf, 0, output_one_offs))
+      } else {
+      }
+      output_one_buf = binary.create(OUTPUT_ONE_LENGTH)
+      output_one_offs = 0 
+    }
   }
 
   function output_many(vals) {
@@ -848,6 +876,7 @@ function inflate() {
       , byt
       , olen
 
+    output_one_recycle()
     for(var i = 0, len = vals.length; i < len; ++i) {
       byt = vals[i]
       adler_s1 = (adler_s1 + byt) % 65521
