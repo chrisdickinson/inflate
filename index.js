@@ -121,15 +121,6 @@ function inflate() {
   var adler_s1 = 1
     , adler_s2 = 0
 
-  // These are here to pique your interest and as a side effect
-  // prevent some global leakage. Mystery abounds!
-  var _call_header
-    , _call_bytes
-    , _call_bits
-    , _call_codes
-    , _call_dynamic
-    , _call_decode
-
   // If at any point our stream pauses (the next item in the chain
   // of pipes can't accept any data at the moment), we'll need to be
   // able to start executing again once it drains. This `resume` listener
@@ -161,7 +152,6 @@ function inflate() {
     bytes_read = 0
     output_idx = 0
     ended = false
-    state = null
     got = 0
     adler_s1 = 1
     adler_s2 = 0
@@ -173,54 +163,36 @@ function inflate() {
     return out
   }
 
-  // The mystery deepens.
-  _call_header = {
-    last: null
-  }
+  var bytes_need = 0
+    , bytes_value = []
 
-  _call_bytes = {
-    need: 0
-  , value: []
-  , last: null
-  }
+  var bits_need = 0
+    , bits_value = []
 
-  _call_bits = {
-    need: 0
-  , value: []
-  , last: null
-  }
+  var codes_distcode = null
+    , codes_lencode = null
+    , codes_len = 0
+    , codes_dist = 0
+    , codes_symbol = 0
 
-  _call_codes = {
-      distcode: null
-    , lencode: null
-    , len: 0
-    , dist: 0
-    , symbol: 0
-    , last: null
-  }
+  var dynamic_distcode = {symbol: [], count: []}
+    , dynamic_lencode = {symbol: [], count: []}
+    , dynamic_lengths = []
+    , dynamic_nlen = 0
+    , dynamic_ndist = 0
+    , dynamic_ncode = 0
+    , dynamic_index = 0
+    , dynamic_symbol = 0
+    , dynamic_len = 0
 
-  _call_dynamic = {
-      distcode: {symbol: [], count: []}
-    , lencode: {symbol: [], count: []}
-    , lengths: []
-    , nlen: 0
-    , ndist: 0
-    , ncode: 0
-    , index: 0
-    , symbol: 0
-    , len: 0
-    , last: 0
-  }
+  var decode_huffman = null
+    , decode_len = 0
+    , decode_code = 0
+    , decode_first = 0
+    , decode_count = 0
+    , decode_index = 0
 
-  _call_decode = {
-      huffman: null
-    , len: 0
-    , code: 0
-    , first: 0
-    , count: 0
-    , index: 0
-    , last: 0
-  }
+  var last = null
 
   // Okay, cool. We're just about ready to hand back the stream.
   // Set it up so that the first thing it does is to look for
@@ -272,54 +244,46 @@ function inflate() {
   // is that since we've got a stack of states around, we simply "resume" whenever we get
   // more data -- which means that all of our states have to be tolerant of re-entrance.
   function call_header() {
-    return _call_header
   }
 
   function call_bytes(need) {
-    _call_bytes.value.length = 0
-    _call_bytes.need = need
-    return _call_bytes
+    bytes_value.length = 0
+    bytes_need = need
   }
 
   function call_bits(need) {
-    _call_bits.value = 0
-    _call_bits.need = need
-    return _call_bits
+    bits_value = 0
+    bits_need = need
   }
 
   function call_codes(distcode, lencode) {
-    _call_codes.len =
-    _call_codes.dist =
-    _call_codes.symbol = 0
-    _call_codes.distcode = distcode
-    _call_codes.lencode = lencode
-    return _call_codes
+    codes_len =
+    codes_dist =
+    codes_symbol = 0
+    codes_distcode = distcode
+    codes_lencode = lencode
   }
 
   function call_dynamic() {
-    _call_dynamic.distcode.symbol.length =
-    _call_dynamic.distcode.count.length =
-    _call_dynamic.lencode.symbol.length =
-    _call_dynamic.lencode.count.length =
-    _call_dynamic.lengths.length = 0
-    _call_dynamic.nlen = 0
-    _call_dynamic.ndist = 0
-    _call_dynamic.ncode = 0
-    _call_dynamic.index = 0
-    _call_dynamic.symbol = 0
-    _call_dynamic.len = 0
-    return _call_dynamic
+    dynamic_distcode.symbol.length =
+    dynamic_distcode.count.length =
+    dynamic_lencode.symbol.length =
+    dynamic_lencode.count.length =
+    dynamic_lengths.length = 0
+    dynamic_nlen = 0
+    dynamic_ndist = 0
+    dynamic_ncode = 0
+    dynamic_index = 0
+    dynamic_symbol = 0
+    dynamic_len = 0
   }
 
   function call_decode(h) {
-    _call_decode.huffman = h
-    _call_decode.first =
-    _call_decode.index =
-    _call_decode.index =
-    _call_decode.code = 0
-
-    _call_decode.len = 1
-    return _call_decode
+    decode_huffman = h
+    decode_len = 1
+    decode_first = 
+    decode_index =
+    decode_code = 0
   }
 
   // Whenever we get data, we shove it onto the
@@ -356,8 +320,8 @@ function inflate() {
   }
 
   function got_stream_header() {
-    var cmf = state.last[0]
-      , flg = state.last[1]
+    var cmf = last[0]
+      , flg = last[1]
 
     // make sure that the header as a 16bit int is a multiple of 31.
     if((cmf << 8 | flg) % 31 !== 0) {
@@ -391,7 +355,7 @@ function inflate() {
   // available to us. If it's 1, this is the last block, otherwise,
   // get ready for more blocks.
   function on_got_is_final() {
-    is_final = state.last
+    is_final = last
     become(bits, call_bits(2), on_got_type)
   }
 
@@ -407,12 +371,12 @@ function inflate() {
   // * "dynamic": read the huffman trees from the stream, then use
   //   them to generate output.
   function on_got_type() {
-    if(state.last === 0) {
+    if(last === 0) {
       become(bytes, call_bytes(4), on_got_len_nlen)
       return
     }
 
-    if(state.last === 1) {
+    if(last === 1) {
       // `fixed` and `dynamic` blocks both eventually delegate
       // to the "codes" state -- which reads bits of input, throws
       // them into a huffman tree, and produces "symbols" of output.
@@ -432,8 +396,8 @@ function inflate() {
   // Of note: `len` can be zero. This can be used to
   // byte-align other blocks.
   function on_got_len_nlen() {
-    var want = state.last[0] | (state.last[1] << 8)
-      , nlen = state.last[2] | (state.last[3] << 8)
+    var want = last[0] | (last[1] << 8)
+      , nlen = last[2] | (last[3] << 8)
 
     if((~nlen & 0xFFFF) !== want) {
       return stream.emit('error', new Error(
@@ -452,7 +416,7 @@ function inflate() {
   // move on to checking that our checksum matches
   // the stream checksum, or to the next block.
   function on_got_stored() {
-    output_many(state.last)
+    output_many(last)
     if(is_final) {
       become(bytes, call_bytes(4), on_got_adler)
       return
@@ -470,18 +434,18 @@ function inflate() {
   }
 
   function on_got_nlen() {
-    state.nlen = state.last + 257
+    dynamic_nlen = last + 257
     become(bits, call_bits(5), on_got_ndist)
   }
 
   function on_got_ndist() {
-    state.ndist = state.last + 1
+    dynamic_ndist = last + 1
     become(bits, call_bits(4), on_got_ncode)
   }
 
   function on_got_ncode() {
-    state.ncode = state.last + 4
-    if(state.nlen > MAXLCODES || state.ndist > MAXDCODES) {
+    dynamic_ncode = last + 4
+    if(dynamic_nlen > MAXLCODES || dynamic_ndist > MAXDCODES) {
       stream.emit('error', new Error('bad counts'))
       return
     }
@@ -490,12 +454,12 @@ function inflate() {
   }
 
   function on_got_lengths_part() {
-    state.lengths[order[state.index]] = state.last
+    dynamic_lengths[order[dynamic_index]] = last
 
-    ++state.index
-    if(state.index === state.ncode) {
-      for(; state.index < 19; ++state.index) {
-        state.lengths[order[state.index]] = 0
+    ++dynamic_index
+    if(dynamic_index === dynamic_ncode) {
+      for(; dynamic_index < 19; ++dynamic_index) {
+        dynamic_lengths[order[dynamic_index]] = 0
       }
 
       // temporarily construct the `lencode` using the
@@ -503,31 +467,31 @@ function inflate() {
       // symbols produced by throwing bits into the huffman
       // tree to constuct the `lencode` and `distcode` huffman
       // trees.
-      construct(state.lencode, state.lengths, 19)
-      state.index = 0
+      construct(dynamic_lencode, dynamic_lengths, 19)
+      dynamic_index = 0
 
-      become(decode, call_decode(state.lencode), on_got_dynamic_symbol_iter)
+      become(decode, call_decode(dynamic_lencode), on_got_dynamic_symbol_iter)
       return
     }
     become(bits, call_bits(3), on_got_lengths_part)
   }
 
   function on_got_dynamic_symbol_iter() {
-    state.symbol = state.last
+    dynamic_symbol = last
 
-    if(state.symbol < 16) {
-      state.lengths[state.index++] = state.symbol
+    if(dynamic_symbol < 16) {
+      dynamic_lengths[dynamic_index++] = dynamic_symbol
       do_check()
       return
     }
 
-    state.len = 0
-    if(state.symbol === 16) {
+    dynamic_len = 0
+    if(dynamic_symbol === 16) {
       become(bits, call_bits(2), on_got_dynamic_symbol_16)
       return
     }
 
-    if(state.symbol === 17) {
+    if(dynamic_symbol === 17) {
       become(bits, call_bits(3), on_got_dynamic_symbol_17)
       return
     }
@@ -536,57 +500,57 @@ function inflate() {
   }
 
   function on_got_dynamic_symbol_16() {
-    state.len = state.lengths[state.index - 1]
+    dynamic_len = dynamic_lengths[dynamic_index - 1]
     on_got_dynamic_symbol_17()
   }
 
   function on_got_dynamic_symbol_17() {
-    state.symbol = 3 + state.last
+    dynamic_symbol = 3 + last
     do_dynamic_end_loop()
   }
 
   function on_got_dynamic_symbol() {
-    state.symbol = 11 + state.last
+    dynamic_symbol = 11 + last
     do_dynamic_end_loop()
   }
 
   function do_dynamic_end_loop() {
-    if(state.index + state.symbol > state.nlen + state.ndist) {
+    if(dynamic_index + dynamic_symbol > dynamic_nlen + dynamic_ndist) {
       stream.emit('error', new Error('too many lengths'))
       return
     }
 
-    while(state.symbol--) {
-      state.lengths[state.index++] = state.len
+    while(dynamic_symbol--) {
+      dynamic_lengths[dynamic_index++] = dynamic_len
     }
 
     do_check()
   }
 
   function do_check() {
-    if(state.index >= state.nlen + state.ndist) {
+    if(dynamic_index >= dynamic_nlen + dynamic_ndist) {
       end_read_dynamic()
       return
     }
-    become(decode, call_decode(state.lencode), on_got_dynamic_symbol_iter)
+    become(decode, call_decode(dynamic_lencode), on_got_dynamic_symbol_iter)
   }
 
   function end_read_dynamic() {
     // okay, we can finally start reading data out of the stream.
-    construct(state.lencode, state.lengths, state.nlen)
-    construct(state.distcode, state.lengths.slice(state.nlen), state.ndist)
+    construct(dynamic_lencode, dynamic_lengths, dynamic_nlen)
+    construct(dynamic_distcode, dynamic_lengths.slice(dynamic_nlen), dynamic_ndist)
     become(start_codes, call_codes(
-        state.distcode
-      , state.lencode
+        dynamic_distcode
+      , dynamic_lencode
     ), done_with_codes)
   }
 
   function start_codes() {
-    become(decode, call_decode(state.lencode), on_got_codes_symbol)
+    become(decode, call_decode(codes_lencode), on_got_codes_symbol)
   }
 
   function on_got_codes_symbol() {
-    var symbol = state.symbol = state.last
+    var symbol = codes_symbol = last
     if(symbol < 0) {
       stream.emit('error', new Error('invalid symbol'))
       return
@@ -597,13 +561,13 @@ function inflate() {
     // window for use later.
     if(symbol < 256) {
       output_one(symbol)
-      become(decode, call_decode(state.lencode), on_got_codes_symbol)
+      become(decode, call_decode(codes_lencode), on_got_codes_symbol)
       return
     }
 
     // this is fun. see `on_got_codes_len` for more.
     if(symbol > 256) {
-      symbol = state.symbol -= 257
+      symbol = codes_symbol -= 257
       if(symbol >= 29) {
         stream.emit('error', new Error('invalid fixed code'))
         return
@@ -626,23 +590,23 @@ function inflate() {
   // table with that 0-indexed symbol to get the base length, and add our "extended
   // length" to that to get total length.
   function on_got_codes_len() {
-    state.len = lens[state.symbol] + state.last
-    become(decode, call_decode(state.distcode), on_got_codes_dist_symbol)
+    codes_len = lens[codes_symbol] + last
+    become(decode, call_decode(codes_distcode), on_got_codes_dist_symbol)
   }
 
   // We then pull out a "distance" in much the same fashion.
   function on_got_codes_dist_symbol() {
-    state.symbol = state.last
-    if(state.symbol < 0) {
+    codes_symbol = last
+    if(codes_symbol < 0) {
       stream.emit('error', new Error('invalid distance symbol'))
       return
     }
 
-    become(bits, call_bits(dext[state.symbol]), on_got_codes_dist_dist)
+    become(bits, call_bits(dext[codes_symbol]), on_got_codes_dist_dist)
   }
 
   function on_got_codes_dist_dist() {
-    var dist = dists[state.symbol] + state.last
+    var dist = dists[codes_symbol] + last
 
     // Once we have a "distance" and a "length", we start to output bytes.
     // We reach "dist" back from our current output position to get the byte
@@ -653,11 +617,11 @@ function inflate() {
     // 2. `X % (2^N) == X & (2^N - 1)` with the distinction that
     //    the result of the bitwise AND won't be negative for the
     //    range of values we're feeding it. Spare a modulo, spoil the child.
-    while(state.len--) {
+    while(codes_len--) {
       output_one(output[(output_idx - dist) & WINDOW_MINUS_ONE])
     }
 
-    become(decode, call_decode(state.lencode), on_got_codes_symbol)
+    become(decode, call_decode(codes_lencode), on_got_codes_symbol)
   }
 
   function done_with_codes() {
@@ -672,8 +636,8 @@ function inflate() {
   // just 4 bytes that should match up with what we've calculated
   // thus far for the adler checksum.
   function on_got_adler() {
-    var check_s1 = state.last[3] | (state.last[2] << 8)
-      , check_s2 = state.last[1] | (state.last[0] << 8)
+    var check_s1 = last[3] | (last[2] << 8)
+      , check_s2 = last[1] | (last[0] << 8)
 
     if(check_s2 !== adler_s2 || check_s1 !== adler_s1) {
       stream.emit('error', new Error(
@@ -705,7 +669,7 @@ function inflate() {
   }
 
   function _decode() {
-    if(state.len > MAXBITS) {
+    if(decode_len > MAXBITS) {
       stream.emit('error', new Error('ran out of codes'))
       return
     }
@@ -714,17 +678,17 @@ function inflate() {
   }
 
   function got_decode_bit() {
-    state.code = (state.code | state.last) >>> 0
-    state.count = state.huffman.count[state.len]
-    if(state.code < state.first + state.count) {
-      unbecome(state.huffman.symbol[state.index + (state.code - state.first)])
+    decode_code = (decode_code | last) >>> 0
+    decode_count = decode_huffman.count[decode_len]
+    if(decode_code < decode_first + decode_count) {
+      unbecome(decode_huffman.symbol[decode_index + (decode_code - decode_first)])
       return
     }
-    state.index += state.count
-    state.first += state.count
-    state.first <<= 1
-    state.code = (state.code << 1) >>> 0
-    ++state.len
+    decode_index += decode_count
+    decode_first += decode_count
+    decode_first <<= 1
+    decode_code = (decode_code << 1) >>> 0
+    ++decode_len
     _decode()
   }
 
@@ -736,7 +700,6 @@ function inflate() {
     states.unshift({
       current: fn
     , next: then
-    , state: state = s
     })
   }
 
@@ -760,8 +723,7 @@ function inflate() {
       stream.queue(null)
       return
     }
-    state = states[0].state
-    state.last = result
+    last = result
   }
 
   // take N bits out of the stream (starting at the
@@ -771,44 +733,44 @@ function inflate() {
       , idx
 
     idx = 0
-    state.value = bitbuf
-    while(bitcnt < state.need) {
-      // we do this to preserve `state.value` when
+    bits_value = bitbuf
+    while(bitcnt < bits_need) {
+      // we do this to preserve `bits_value` when
       // "need_input" is tripped.
       //
       // fun fact: if we moved that into the `if` statement
       // below, it would trigger a deoptimization of this (very
       // hot) function. JITs!
-      bitbuf = state.value
+      bitbuf = bits_value
       byt = take()
       if(need_input) {
         break
       }
       ++idx
-      state.value = (state.value | (byt << bitcnt)) >>> 0
+      bits_value = (bits_value | (byt << bitcnt)) >>> 0
       bitcnt += 8
     }
 
     if(!need_input) {
-      bitbuf = state.value >>> state.need
-      bitcnt -= state.need
-      unbecome((state.value & ((1 << state.need) - 1)) >>> 0)
+      bitbuf = bits_value >>> bits_need
+      bitcnt -= bits_need
+      unbecome((bits_value & ((1 << bits_need) - 1)) >>> 0)
     }
   }
 
   // take N bytes out of the stream, disregarding current bit
   // offset.
   function bytes() {
-    var byte_accum = state.value
+    var byte_accum = bytes_value
       , value
 
-    while(state.need--) {
+    while(bytes_need--) {
       value = take()
       // Try not to `return` from multiple places, since
       // that apparently gives the JIT a hard time.
       if(need_input) {
         bitbuf = bitcnt = 0
-        state.need += 1
+        bytes_need += 1
         break
       }
       byte_accum[byte_accum.length] = value
