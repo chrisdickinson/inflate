@@ -37,7 +37,7 @@ var order = [
 var WINDOW = 32768
   , WINDOW_MINUS_ONE = WINDOW - 1
 
-function inflate(read, on_unused) {
+function inflate(emit, on_unused) {
   var output = new Uint8Array(WINDOW)
     , need_input = false
     , buffer_offset = 0
@@ -62,7 +62,7 @@ function inflate(read, on_unused) {
   var adler_s1 = 1
     , adler_s2 = 0
 
-  stream.recycle = function recycle() {
+  onread.recycle = function recycle() {
     var out
     buffer.length = 0
     buffer_offset = 0
@@ -118,38 +118,14 @@ function inflate(read, on_unused) {
   become(noop, {}, noop)
   start_stream_header()
 
-  var queued = []
-    , emit
-
-  stream.is = 'min-stream-pull-filter'
-
-  return stream
-
-  function stream(close, callback) {
-    if(queued.length) {
-      var out = queued.shift()
-      if(out === null) {
-        return callback()
-      }
-      return callback(null, out)
-    }
-    emit = callback
-    read(null, onread)
-  }
+  return onread
 
   function onread(err, buf) {
-    if(err) {
-      return read(err)
+    if(buf === undefined) {
+      return emit(err)
     }
 
     return write(buf)
-  }
-
-  function queue(obj) {
-    queued.push(obj)
-    if(emit) while(queued.length) {
-      emit(null, queued.shift())
-    }
   }
 
   function noop() {
@@ -207,10 +183,6 @@ function inflate(read, on_unused) {
     }
   }
 
-  function end() {
-    queue(null)
-  }
-
   function execute() {
     do {
       states[0].current()
@@ -218,10 +190,6 @@ function inflate(read, on_unused) {
 
     var needed = need_input
     need_input = false
-
-    if(needed) {
-      read(null, onread)
-    }
   }
 
   function start_stream_header() {
@@ -465,15 +433,11 @@ function inflate(read, on_unused) {
       return
     }
 
-
-
-
     if(symbol < 256) {
       output_one(symbol)
       become(decode, call_decode(codes_lencode), on_got_codes_symbol)
       return
     }
-
 
     if(symbol > 256) {
       symbol = codes_symbol -= 257
@@ -485,7 +449,6 @@ function inflate(read, on_unused) {
       become(bits, call_bits(lext[symbol]), on_got_codes_len)
       return
     }
-
 
     if(symbol === 256) {
       unbecome()
@@ -508,7 +471,6 @@ function inflate(read, on_unused) {
     codes_symbol = last
     if(codes_symbol < 0) {
       emit(new Error('invalid distance symbol'))
-      stream.emit('error', new Error('invalid distance symbol'))
       return
     }
 
@@ -568,7 +530,8 @@ function inflate(read, on_unused) {
     }
 
     output_idx = 0
-    queue(null)
+    ended = true
+    emit()
   }
 
   function decode() {
@@ -626,7 +589,8 @@ function inflate(read, on_unused) {
         )
       }
       output_idx = 0
-      queue(null)
+      ended = true
+      emit()
       return
     }
     last = result
@@ -729,7 +693,7 @@ function inflate(read, on_unused) {
   function output_one_recycle() {
     if(output_one_offs > 0) {
       if(output_one_buf) {
-        queue(binary.subarray(output_one_buf, 0, output_one_offs))
+        emit(null, binary.subarray(output_one_buf, 0, output_one_offs))
       } else {
       }
       output_one_buf = binary.create(OUTPUT_ONE_LENGTH)
@@ -751,7 +715,7 @@ function inflate(read, on_unused) {
       output_idx &= WINDOW_MINUS_ONE
     }
 
-    queue(binary.from(vals))
+    emit(binary.from(vals))
   }
 }
 

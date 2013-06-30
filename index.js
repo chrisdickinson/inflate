@@ -1,6 +1,6 @@
 module.exports = inflate
 
-var min = require('./min')
+var min = pushToPull(require('./min'))
   , through = require('through')
 
 function inflate() {
@@ -53,5 +53,41 @@ function inflate() {
     }
 
     cb = callback
+  }
+}
+
+function pushToPull(push) {
+  return function (read) {
+    var dataQueue = []
+    var readQueue = []
+    var reading = false
+    var emit = push(function () {
+      dataQueue.push(arguments)
+      check()
+    })
+
+    function check() {
+      while (dataQueue.length && readQueue.length) {
+        readQueue.shift().apply(null, dataQueue.shift())
+      }
+      if (!reading && readQueue.length) {
+        reading = true
+        read(null, onRead)
+      }
+    }
+
+    function onRead(err, item) {
+      reading = false
+      emit(err, item)
+      check()
+    }
+
+    return function (close, callback) {
+      if (close) {
+        return read(close, callback)
+      }
+      readQueue.push(callback)
+      check()
+    }
   }
 }
