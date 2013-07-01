@@ -1,6 +1,6 @@
 {
   "name": "inflate",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "pure javascript inflate implemented as a through stream",
   "main": "index.js",
   "scripts": {
